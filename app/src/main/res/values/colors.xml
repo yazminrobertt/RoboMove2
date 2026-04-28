@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Main brand colors matching your design -->
+    <color name="kids_soft_blue">#D0F2F2</color>
+    <color name="robomove_navy">#2D3250</color>
+    <color name="robomove_yellow">#F5C842</color>
+    <color name="robomove_purple">#C8A8E9</color>
+    <color name="robomove_pink_bg">#F4A7B9</color>
+    <color name="robomove_teal">#4ECDC4</color>
+    <color name="robomove_red">#E74C3C</color>
+    <color name="robomove_white">#FFFFFF</color>
+    <color name="robomove_light_gray">#F5F5F5</color>
+    <color name="robomove_score_blue">#7986CB</color>
+    <color name="robomove_progress_orange">#FF6B35</color>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+</resources>

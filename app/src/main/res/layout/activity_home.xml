@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/robomove_white">
+
+    <!-- LEFT IMAGE -->
+    <ImageView
+        android:id="@+id/iv_logo"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:src="@drawable/bg_home_activity"
+        android:contentDescription="Home Illustration"
+        android:scaleType="fitCenter"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/guideline"
+        android:layout_margin="24dp"/>
+
+    <!-- SPLIT GUIDE -->
+    <androidx.constraintlayout.widget.Guideline
+        android:id="@+id/guideline"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        app:layout_constraintGuide_percent="0.45"/>
+
+    <!-- RIGHT SIDE GROUP (CENTERED) -->
+
+    <!-- TITLE -->
+    <TextView
+        android:id="@+id/tv_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="ROBOMOVE"
+        android:textColor="@color/robomove_navy"
+        android:textSize="100sp"
+        android:textStyle="bold"
+        android:letterSpacing="0.1"
+        app:layout_constraintStart_toStartOf="@id/guideline"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/tv_subtitle"
+        app:layout_constraintVertical_chainStyle="packed"
+        android:layout_marginBottom="12dp"/>
+
+    <!-- SUBTITLE -->
+    <TextView
+        android:id="@+id/tv_subtitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="LET'S SEE WHAT YOU'VE GOT"
+        android:textColor="@color/robomove_navy"
+        android:textSize="20sp"
+        android:letterSpacing="0.1"
+        app:layout_constraintStart_toStartOf="@id/guideline"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/tv_title"
+        app:layout_constraintBottom_toTopOf="@id/btn_start"
+        android:layout_marginBottom="24dp"/>
+
+    <!-- BUTTON -->
+    <Button
+        android:id="@+id/btn_start"
+        android:layout_width="220dp"
+        android:layout_height="60dp"
+        android:text="START CHALLENGE"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:backgroundTint="@color/robomove_yellow"
+        android:textColor="@color/robomove_navy"
+        app:layout_constraintStart_toStartOf="@id/guideline"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/tv_subtitle"
+        app:layout_constraintBottom_toBottomOf="parent"/>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">RoboMove</string>
+    <string name="start_challenge">START CHALLENGE</string>
+    <string name="lets_see">LET\'S SEE WHAT YOU\'VE GOT</string>
+    <string name="say_start">Say "START" to begin</string>
+    <string name="say_pause">Say "PAUSE" to pause</string>
+    <string name="say_stop">Say "STOP" to stop</string>
+    <string name="level_complete">Level Complete!</string>
+    <string name="congratulations">Congratulations!</string>
+    <string name="you_are_champion">You are a champion!</string>
+</resources>

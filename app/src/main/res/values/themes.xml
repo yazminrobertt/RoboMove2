@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.RoboMove" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/robomove_navy</item>
+        <item name="colorPrimaryVariant">@color/robomove_navy</item>
+        <item name="colorOnPrimary">@color/robomove_white</item>
+        <item name="colorSecondary">@color/robomove_yellow</item>
+        <item name="android:windowBackground">@color/robomove_white</item>
+    </style>
+
+    <!-- Splash screen has no animation delay flash -->
+    <style name="Theme.RoboMove.Splash" parent="Theme.RoboMove">
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowBackground">@color/robomove_navy</item>
+    </style>
+</resources>
