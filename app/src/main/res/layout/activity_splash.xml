@@ -36,7 +36,7 @@
         android:fontFamily="sans-serif-black"
         android:letterSpacing="0.1"
         android:text="ROBOMOVE"
-        android:textColor="@color/robomove_yellow"
+        android:textColor="@color/robomove_navy"
         android:textSize="48sp"
         android:textStyle="bold"
 
@@ -52,8 +52,8 @@
         android:layout_height="10dp"
         android:layout_marginBottom="164dp"
         android:indeterminate="true"
-        android:indeterminateTint="@color/robomove_yellow"
-        android:progressTint="@color/robomove_yellow"
+        android:indeterminateTint="@color/robomove_navy"
+        android:progressTint="@color/robomove_navy"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent" />

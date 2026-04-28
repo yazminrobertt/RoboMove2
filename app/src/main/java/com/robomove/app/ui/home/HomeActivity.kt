@@ -9,13 +9,15 @@ import com.robomove.app.databinding.ActivityHomeBinding
 
 class HomeActivity : AppCompatActivity() {
 
+    private lateinit var binding: ActivityHomeBinding
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_home)
 
-        val btnStart = findViewById<android.view.View>(R.id.btn_start)
+        binding = ActivityHomeBinding.inflate(layoutInflater)
+        setContentView(binding.root)
 
-        btnStart.setOnClickListener {
+        binding.btnStart.setOnClickListener {
             startActivity(Intent(this, InstructionsActivity::class.java))
         }
     }
