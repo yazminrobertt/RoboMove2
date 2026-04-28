@@ -3,7 +3,6 @@ package com.robomove.app.ui.home
 import android.content.Intent
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
-import com.robomove.app.R
 import com.robomove.app.ui.instructions.InstructionsActivity
 import com.robomove.app.databinding.ActivityHomeBinding
 
