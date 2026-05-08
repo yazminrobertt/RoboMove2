@@ -51,24 +51,41 @@ class StopConfirmationDialog(
     }
 
     private fun setupVoice() {
+
         voiceManager = VoiceManager(context) { command ->
-            // Must run on UI thread
-            (context as? android.app.Activity)?.runOnUiThread {
+
+            // Always run on main/UI thread
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+
                 when (command) {
+
                     VoiceCommand.YES -> {
+                        android.util.Log.d("STOP_DIALOG", "YES DETECTED")
+
                         voiceManager.stopListening()
+
                         dismiss()
+
                         onYes()
                     }
+
                     VoiceCommand.NO -> {
+                        android.util.Log.d("STOP_DIALOG", "NO DETECTED")
+
                         voiceManager.stopListening()
+
                         dismiss()
+
                         onNo()
                     }
-                    else -> { /* wait for yes or no */ }
+
+                    else -> {
+                        // Ignore other words
+                    }
                 }
             }
         }
+
         voiceManager.startListening()
     }
 

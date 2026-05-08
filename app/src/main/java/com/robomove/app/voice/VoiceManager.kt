@@ -96,7 +96,7 @@ class VoiceManager(
                 if (shouldKeepListening) {
                     createAndStartRecognizer()
                 }
-            }, 1200)
+            }, 1300)
         }
     }
 
