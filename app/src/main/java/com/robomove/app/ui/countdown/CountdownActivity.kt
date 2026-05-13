@@ -10,6 +10,7 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.robomove.app.R
 import com.robomove.app.ui.game.GameActivity
+import com.robomove.app.ui.levelstart.LevelStartActivity
 
 class CountdownActivity : AppCompatActivity() {
 
@@ -64,10 +65,13 @@ class CountdownActivity : AppCompatActivity() {
     }
 
     private fun goToGame() {
-        val intent = Intent(this, GameActivity::class.java)
+        // Go to LevelStart first (not directly to game)
+        val intent = Intent(this, LevelStartActivity::class.java).apply {
+            putExtra(LevelStartActivity.EXTRA_LEVEL_INDEX, 0)
+            putExtra(LevelStartActivity.EXTRA_TOTAL_SCORE, 0)
+        }
         startActivity(intent)
-        // Slide in from right
-        overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.slide_out_right)
+        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
         finish()
     }
 

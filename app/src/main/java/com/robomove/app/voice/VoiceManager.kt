@@ -81,6 +81,7 @@ class VoiceManager(
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
             // Keep listening even during partial speech
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra("android.speech.extra.DICTATION_MODE", true)
         }
 
         speechRecognizer?.startListening(intent)
