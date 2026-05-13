@@ -42,7 +42,7 @@
         android:id="@+id/img_warmup"
         android:layout_width="1112dp"
         android:layout_height="559dp"
-        android:layout_marginTop="16dp"
+        android:layout_marginTop="48dp"
         android:contentDescription="Warm up image"
         android:scaleType="fitCenter"
         android:src="@drawable/lvl1_kid"
