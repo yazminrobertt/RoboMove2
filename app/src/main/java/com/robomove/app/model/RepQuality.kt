@@ -6,6 +6,6 @@ package com.robomove.app.model
  */
 enum class RepQuality {
     CORRECT,        // +10 points — perfect form
-    SLIGHTLY_WRONG, // +5  points — close but not quite
+    SLIGHTLY_WRONG, // +10 jugak  points — close but not quite
     WRONG           // +0  points — not detected / wrong pose
 }

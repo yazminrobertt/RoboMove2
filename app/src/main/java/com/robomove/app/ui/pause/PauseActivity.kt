@@ -5,12 +5,21 @@ import android.os.Bundle
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.robomove.app.R
-import com.robomove.app.ui.home.HomeActivity
+import com.robomove.app.ui.levelcomplete.LevelCompleteActivity
 import com.robomove.app.voice.VoiceCommand
 import com.robomove.app.voice.VoiceManager
-import com.robomove.app.utils.StopConfirmationDialog
 
 class PauseActivity : AppCompatActivity() {
+
+    companion object {
+        // Actions sent back to GameActivity
+        const val ACTION_RESUME        = "resume"
+        const val ACTION_RESTART_LEVEL = "restart_level"
+
+        // Extras passed in from GameActivity
+        const val EXTRA_LEVEL_INDEX = "level_index"
+        const val EXTRA_TOTAL_SCORE = "total_score"
+    }
 
     private lateinit var voiceManager: VoiceManager
 
@@ -23,65 +32,59 @@ class PauseActivity : AppCompatActivity() {
     }
 
     private fun setupButtons() {
-        // "Go to Home" button — tap to go home without voice
-        findViewById<TextView>(R.id.btn_go_home).setOnClickListener {
-            goToHome()
+
+        // RESUME — go back to game
+        findViewById<TextView>(R.id.btn_resume).setOnClickListener {
+            sendResult(ACTION_RESUME)
+        }
+
+        // RESTART LEVEL — tell GameActivity to restart from exercise 0
+        findViewById<TextView>(R.id.btn_restart_level).setOnClickListener {
+            sendResult(ACTION_RESTART_LEVEL)
+        }
+
+        // END GAME — navigate to LevelCompleteActivity as final screen
+        findViewById<TextView>(R.id.btn_end_game).setOnClickListener {
+            endGame()
         }
     }
 
     private fun setupVoice() {
         voiceManager = VoiceManager(this) { command ->
-            // Voice callbacks come on background thread — move to UI thread
             runOnUiThread {
-                handleVoiceCommand(command)
+                when (command) {
+                    VoiceCommand.PLAY -> sendResult(ACTION_RESUME)
+                    VoiceCommand.STOP -> endGame()
+                    else -> {}
+                }
             }
         }
         voiceManager.startListening()
     }
 
-    private fun handleVoiceCommand(command: VoiceCommand) {
-        when (command) {
-            VoiceCommand.PLAY -> {
-                // Resume — go back to Game
-                resumeGame()
-            }
-            VoiceCommand.STOP -> {
-                // Show stop confirmation (same dialog from game)
-                showStopConfirmation()
-            }
-            else -> { /* ignore other commands while paused */ }
-        }
-    }
-
-    private fun resumeGame() {
-        // Send result back to GameActivity telling it to resume
+    private fun sendResult(action: String) {
         val intent = Intent().apply {
-            putExtra("action", "resume")
+            putExtra("action", action)
         }
         setResult(RESULT_OK, intent)
         finish()
     }
 
-    private fun showStopConfirmation() {
-        // Stop listening while dialog is open
+    private fun endGame() {
         voiceManager.stopListening()
 
-        StopConfirmationDialog(
-            context = this,
-            onYes = { goToHome() },
-            onNo  = {
-                // User said no — stay paused, restart listening
-                voiceManager.startListening()
-            }
-        ).show()
-    }
+        val levelIndex = intent.getIntExtra(EXTRA_LEVEL_INDEX, 0)
+        val totalScore = intent.getIntExtra(EXTRA_TOTAL_SCORE, 0)
 
-    private fun goToHome() {
-        val intent = Intent(this, HomeActivity::class.java)
-        // Clear the back stack so pressing back doesn't return to game
-        intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
+        // Go to LevelComplete screen marked as game over
+        val intent = Intent(this, LevelCompleteActivity::class.java).apply {
+            putExtra(LevelCompleteActivity.EXTRA_LEVEL_INDEX,  levelIndex)
+            putExtra(LevelCompleteActivity.EXTRA_TOTAL_SCORE,  totalScore)
+            putExtra(LevelCompleteActivity.EXTRA_IS_GAME_OVER, true)
+        }
         startActivity(intent)
-        finish()
+        // Clear back stack so user cannot return to game
+        finishAffinity()
     }
 
     override fun onDestroy() {

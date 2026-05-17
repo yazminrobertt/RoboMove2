@@ -13,7 +13,8 @@ package com.robomove.app.model
 data class Exercise(
     val type: ExerciseType,
     val displayName: String,
-    val instruction: String,
+    val instruction: String,           // spoken by TTS
+    val description: String = "",      // ← ADD THIS — shown on screen
     val targetReps: Int = 5,
     val videoFileName: String = ""
 )

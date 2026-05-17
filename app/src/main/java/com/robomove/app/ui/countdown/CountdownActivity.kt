@@ -29,11 +29,11 @@ class CountdownActivity : AppCompatActivity() {
     private fun startCountdown() {
         // Count from 3 to 1, then go to game
         // Total = 4000ms, interval = 1000ms (ticks at 3, 2, 1, then done)
-        countDownTimer = object : CountDownTimer(4000, 1000) {
+        countDownTimer = object : CountDownTimer(3000, 1000) {
 
             override fun onTick(millisUntilFinished: Long) {
                 // millisUntilFinished goes 3999 → 2999 → 1999 → 999
-                val secondsLeft = (millisUntilFinished / 1000) + 1
+                val secondsLeft = (millisUntilFinished / 1000).toInt()
                 tvNumber.text = secondsLeft.toString()
                 animateNumber()
             }

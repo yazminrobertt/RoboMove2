@@ -4,7 +4,8 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/robomove_white">
+    android:background="@color/robomove_white"
+    android:fitsSystemWindows="true">
 
     <!-- ═════════ TOP BAR ═════════ -->
 
@@ -14,13 +15,13 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:background="@color/robomove_score_blue"
-        android:paddingStart="28dp"
-        android:paddingEnd="28dp"
-        android:paddingTop="14dp"
-        android:paddingBottom="18dp"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="16dp"
+        android:background="@drawable/bg_score_card"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="16dp"
+        android:layout_marginStart="20dp"
+        android:layout_marginTop="24dp"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
@@ -29,7 +30,7 @@
             android:layout_height="wrap_content"
             android:text="Score:"
             android:textColor="@color/robomove_white"
-            android:textSize="18sp"
+            android:textSize="16sp"
             android:textStyle="bold"/>
 
         <TextView
@@ -38,40 +39,64 @@
             android:layout_height="wrap_content"
             android:text="0"
             android:textColor="@color/robomove_white"
-            android:textSize="42sp"
+            android:textSize="38sp"
             android:textStyle="bold"/>
     </LinearLayout>
 
-    <!-- Exercise Name -->
-    <TextView
-        android:id="@+id/tv_exercise_name"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:text="Raise your left hand"
-        android:textColor="@color/robomove_navy"
-        android:textSize="50dp"
-        android:textStyle="bold"
-        android:gravity="center"
-        android:layout_marginTop="50dp"
-        android:layout_marginStart="16dp"
-        android:layout_marginEnd="16dp"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintStart_toEndOf="@id/layout_score"
-        app:layout_constraintEnd_toStartOf="@id/layout_reps"/>
+    <!-- Exercise name + description stacked in centre top -->
 
     <!-- Reps -->
+
+    <LinearLayout
+        android:id="@+id/layout_exercise_info"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:gravity="center"
+        android:orientation="vertical"
+        app:layout_constraintEnd_toStartOf="@id/layout_reps"
+        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintStart_toEndOf="@id/layout_score"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <!-- Exercise title -->
+        <TextView
+            android:id="@+id/tv_exercise_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="Raise your left hand"
+            android:textColor="@color/robomove_navy"
+            android:textSize="24sp"
+            android:textStyle="bold" />
+
+        <!-- Short written description — matches TTS instruction -->
+        <TextView
+            android:id="@+id/tv_exercise_description"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:gravity="center"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:text="Lift your left arm out to the side and up above your head!"
+            android:textColor="#555555"
+            android:textSize="13sp" />
+
+    </LinearLayout>
+
     <LinearLayout
         android:id="@+id/layout_reps"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:background="@color/robomove_score_blue"
-        android:paddingStart="28dp"
-        android:paddingEnd="28dp"
-        android:paddingTop="14dp"
-        android:paddingBottom="18dp"
-        android:layout_marginEnd="16dp"
-        android:layout_marginTop="16dp"
+        android:background="@drawable/bg_score_card"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="16dp"
+        android:layout_marginEnd="20dp"
+        android:layout_marginTop="24dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
@@ -80,7 +105,7 @@
             android:layout_height="wrap_content"
             android:text="Reps:"
             android:textColor="@color/robomove_white"
-            android:textSize="18sp"
+            android:textSize="16sp"
             android:textStyle="bold"/>
 
         <TextView
@@ -89,7 +114,7 @@
             android:layout_height="wrap_content"
             android:text="0/5"
             android:textColor="@color/robomove_white"
-            android:textSize="42sp"
+            android:textSize="38sp"
             android:textStyle="bold"/>
     </LinearLayout>
 
@@ -100,11 +125,12 @@
         android:id="@+id/card_demo"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="24dp"
-        android:layout_marginBottom="16dp"
-        app:cardCornerRadius="24dp"
+        android:layout_marginStart="20dp"
+        android:layout_marginTop="28dp"
+        android:layout_marginBottom="20dp"
+        app:cardCornerRadius="20dp"
         app:cardBackgroundColor="@color/robomove_pink_bg"
+        app:cardElevation="4dp"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toStartOf="@id/card_camera"
         app:layout_constraintTop_toBottomOf="@id/layout_score"
@@ -127,7 +153,7 @@
                 android:layout_margin="16dp"/>
 
             <!-- Demo Video -->
-            <VideoView
+            <TextureView
                 android:id="@+id/video_demo"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
@@ -154,12 +180,13 @@
         android:id="@+id/card_camera"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:layout_marginStart="12dp"
-        android:layout_marginEnd="16dp"
-        android:layout_marginTop="24dp"
-        android:layout_marginBottom="16dp"
-        app:cardCornerRadius="24dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="20dp"
+        android:layout_marginTop="28dp"
+        android:layout_marginBottom="20dp"
+        app:cardCornerRadius="20dp"
         app:cardBackgroundColor="@color/robomove_pink_bg"
+        app:cardElevation="4dp"
         app:layout_constraintStart_toEndOf="@id/card_demo"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toBottomOf="@id/layout_score"
@@ -180,13 +207,20 @@
                 android:layout_gravity="top|start"
                 android:layout_margin="16dp"/>
 
-            <!-- Camera Preview -->
+            <!-- Camera preview -->
             <androidx.camera.view.PreviewView
                 android:id="@+id/camera_preview"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"/>
 
-            <!-- Pause Button -->
+            <!-- Skeleton overlay — sits exactly on top of camera preview -->
+            <com.robomove.app.vision.PoseOverlayView
+                android:id="@+id/pose_overlay"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@android:color/transparent"/>
+
+            <!-- Pause button (top right of camera card) -->
             <TextView
                 android:id="@+id/btn_pause"
                 android:layout_width="wrap_content"
@@ -213,12 +247,12 @@
         android:id="@+id/layout_progress"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginEnd="16dp"
-        android:layout_marginBottom="16dp"
-        app:cardCornerRadius="24dp"
+        android:layout_marginStart="20dp"
+        android:layout_marginEnd="20dp"
+        android:layout_marginBottom="24dp"
+        app:cardCornerRadius="20dp"
         app:cardBackgroundColor="@color/robomove_light_gray"
-        app:cardElevation="0dp"
+        app:cardElevation="4dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
@@ -227,7 +261,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="18dp">
+            android:padding="20dp">
 
             <!-- Progress Label -->
             <TextView
@@ -236,21 +270,33 @@
                 android:layout_height="wrap_content"
                 android:text="Exercise 1 of 4"
                 android:textColor="@color/robomove_navy"
-                android:textSize="18sp"
+                android:textSize="20sp"
                 android:textStyle="bold"
                 android:layout_gravity="center_horizontal"/>
 
-            <!-- Progress Bar -->
-            <ProgressBar
-                android:id="@+id/progress_bar"
-                style="?android:attr/progressBarStyleHorizontal"
+            <!-- Progress Bar Container -->
+            <FrameLayout
                 android:layout_width="match_parent"
-                android:layout_height="14dp"
-                android:layout_marginTop="10dp"
-                android:max="100"
-                android:progress="0"
-                android:progressTint="@color/robomove_progress_orange"
-                android:progressBackgroundTint="#DDDDDD"/>
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp">
+
+                <!-- Background Track -->
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="18dp"
+                    android:background="@drawable/bg_progress_track"/>
+
+                <!-- Progress Bar -->
+                <ProgressBar
+                    android:id="@+id/progress_bar"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="18dp"
+                    android:max="100"
+                    android:progress="0"
+                    android:progressDrawable="@drawable/progress_bar_drawable"/>
+
+            </FrameLayout>
 
         </LinearLayout>
 
