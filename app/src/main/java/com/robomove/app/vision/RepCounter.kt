@@ -161,7 +161,6 @@ class RepCounter(
         return countRepDirect(isUp = bothUp, qualityHint = quality)
     }
 
-    /** TOUCH SHOULDERS — arms go from T-pose to touching shoulders */
     /**
      * TOUCH SHOULDERS
      *

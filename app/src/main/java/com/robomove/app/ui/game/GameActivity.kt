@@ -72,8 +72,8 @@ class GameActivity : AppCompatActivity() {
     private lateinit var poseOverlayView   : PoseOverlayView
     private lateinit var videoDemo         : TextureView
     private lateinit var tvDemoPlaceholder : TextView
-
     private lateinit var tvExerciseDescription : TextView   // ← ADD
+
 
     // ── Video ──
     private var mediaPlayer: MediaPlayer? = null
@@ -116,6 +116,7 @@ class GameActivity : AppCompatActivity() {
         tvDemoPlaceholder = findViewById(R.id.tv_demo_placeholder)
         tvExerciseDescription = findViewById(R.id.tv_exercise_description)
 
+
         findViewById<TextView>(R.id.btn_pause).setOnClickListener {
             pauseGame()
         }
@@ -136,6 +137,7 @@ class GameActivity : AppCompatActivity() {
 
         tvExerciseName.text = exercise.displayName
         tvReps.text         = "0/${targetReps}"
+        tvExerciseDescription.text = exercise.instruction
         currentReps         = 0
 
         val totalExercises   = currentLevel.exercises.size

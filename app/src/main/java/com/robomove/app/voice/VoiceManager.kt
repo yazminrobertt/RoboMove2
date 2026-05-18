@@ -79,9 +79,15 @@ class VoiceManager(
                 RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
-            // Keep listening even during partial speech
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra("android.speech.extra.DICTATION_MODE", true)
+
+            // How long to wait after speech goes silent before cutting off
+            putExtra("android.speech.extra.SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS", 2000L)
+            // How long to wait if speech MIGHT still be continuing
+            putExtra("android.speech.extra.SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS", 2000L)
+            // Minimum time it must listen before it can cut off at all
+            putExtra("android.speech.extra.SPEECH_INPUT_MINIMUM_LENGTH_MILLIS", 4000L)
         }
 
         speechRecognizer?.startListening(intent)
@@ -97,7 +103,7 @@ class VoiceManager(
                 if (shouldKeepListening) {
                     createAndStartRecognizer()
                 }
-            }, 1300)
+            }, 500)
         }
     }
 
