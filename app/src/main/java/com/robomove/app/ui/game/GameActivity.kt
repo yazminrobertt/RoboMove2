@@ -130,6 +130,16 @@ class GameActivity : AppCompatActivity() {
             runOnUiThread { handleVoiceCommand(command) }
         }
         voiceManager.startListening()
+
+        // Wait for TTS to be ready before speaking the first instruction
+        // This fixes the bug where Level 1 Exercise 1 instruction is skipped
+        feedbackManager.setOnReadyCallback {
+            runOnUiThread {
+                Log.d(TAG, "TTS ready — speaking first exercise instruction now")
+                val exercise = currentExercise
+                feedbackManager.speakExerciseName(exercise.displayName, exercise.instruction)
+            }
+        }
     }
 
     private fun loadCurrentExercise() {
@@ -148,14 +158,24 @@ class GameActivity : AppCompatActivity() {
         repCounter = RepCounter(
             exerciseType   = exercise.type,
             onRepCompleted = { quality -> onRepCompleted(quality) },
-            onPoseFeedback = { msg ->
-                // Feedback is already rate-limited inside FeedbackManager
-                // Only pass through — do not call speakCorrection separately here
-                Log.v(TAG, "Pose hint: $msg")
+            onPoseFeedback = { _ ->
+                // Re-connected: fire correction feedback through FeedbackManager
+                // FeedbackManager's CORRECTION_COOLDOWN_MS prevents spam
+                runOnUiThread {
+                    feedbackManager.speakCorrection(exercise.type)
+                }
             }
         )
 
-        feedbackManager.speakExerciseName(exercise.displayName, exercise.instruction)
+        // Speak instruction
+        // Note: for the very first exercise, this is called via the TTS ready callback
+        // in setupManagers() instead — so we only call directly for exercise 2 onwards
+        if (exerciseIndex > 0 || levelIndex > 0) {
+            feedbackManager.speakExerciseName(exercise.displayName, exercise.instruction)
+        } else {
+            // Level 1 Exercise 1 — TTS ready callback in setupManagers() handles this
+            Log.d(TAG, "Skipping direct speak — TTS ready callback will handle Level 1 Ex 1")
+        }
 
         // Load demo video or show placeholder
         val videoName = exercise.videoFileName
@@ -295,6 +315,7 @@ class GameActivity : AppCompatActivity() {
 
     private fun onRepCompleted(quality: RepQuality) {
         runOnUiThread {
+            if (currentReps >= targetReps) return@runOnUiThread
             val points = scoreManager.addRep(quality)
             currentReps++
 

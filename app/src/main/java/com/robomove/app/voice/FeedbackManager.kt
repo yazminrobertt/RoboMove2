@@ -37,7 +37,7 @@ class FeedbackManager(context: Context) {
 
     private var tts: TextToSpeech? = null
     private var isReady = false
-
+    private var onReadyCallback: (() -> Unit)? = null
     private var lastCorrectionTime    = 0L
     private var lastEncouragementTime = 0L
     private var instructionSpokenAt   = 0L   // timestamp of last instruction
@@ -52,6 +52,8 @@ class FeedbackManager(context: Context) {
                 tts?.setSpeechRate(0.85f)
                 tts?.setPitch(1.1f)
                 Log.d(TAG, "TTS ready: $isReady")
+                // Notify caller that TTS is ready
+                onReadyCallback?.invoke()
             } else {
                 Log.e(TAG, "TTS init failed: $status")
             }
@@ -61,6 +63,20 @@ class FeedbackManager(context: Context) {
     // ─────────────────────────────────────────
     // PUBLIC API
     // ─────────────────────────────────────────
+
+    /**
+     * Set a callback that fires once TTS is fully initialized.
+     * Use this to delay the first exercise instruction until TTS is ready.
+     * If TTS is already ready when this is called, fires immediately.
+     */
+    fun setOnReadyCallback(callback: () -> Unit) {
+        if (isReady) {
+            // Already ready — fire immediately
+            callback()
+        } else {
+            onReadyCallback = callback
+        }
+    }
 
     /**
      * Speak the exercise name + instruction.

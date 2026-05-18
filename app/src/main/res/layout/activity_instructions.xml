@@ -10,17 +10,18 @@
     <!-- Back Button -->
     <ImageButton
         android:id="@+id/btn_back"
-        android:layout_width="52dp"
-        android:layout_height="52dp"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
         android:src="@drawable/ic_back"
         android:background="@drawable/bg_rule_card"
-        android:padding="10dp"
+        android:padding="12dp"
         android:contentDescription="Back"
+        android:elevation="4dp"
         app:tint="@color/robomove_navy"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        android:layout_marginStart="24dp"
-        android:layout_marginTop="32dp"/>
+        android:layout_marginStart="32dp"
+        android:layout_marginTop="40dp"/>
 
     <!-- Title -->
     <TextView
@@ -29,24 +30,24 @@
         android:layout_height="wrap_content"
         android:text="CHALLENGE RULES"
         android:textColor="@color/robomove_navy"
-        android:textSize="60sp"
+        android:textSize="64sp"
         android:textStyle="bold"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginTop="40dp"/>
+        android:layout_marginTop="48dp"/>
 
     <!-- Follow Moves -->
     <androidx.cardview.widget.CardView
         android:id="@+id/card_follow"
         android:layout_width="0dp"
-        android:layout_height="160dp"
-        app:cardCornerRadius="24dp"
-        app:cardElevation="0dp"
-        app:cardBackgroundColor="#E8D5F5"
-        android:layout_marginStart="32dp"
-        android:layout_marginEnd="32dp"
-        android:layout_marginTop="48dp"
+        android:layout_height="180dp"
+        app:cardCornerRadius="28dp"
+        app:cardElevation="6dp"
+        app:cardBackgroundColor="@color/robomove_white"
+        android:layout_marginStart="40dp"
+        android:layout_marginEnd="40dp"
+        android:layout_marginTop="56dp"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toStartOf="@id/card_reps"
         app:layout_constraintTop_toBottomOf="@id/tv_title">
@@ -56,33 +57,34 @@
             android:layout_height="match_parent"
             android:gravity="center"
             android:orientation="vertical"
-            android:padding="16dp">
-
-            <ImageView
-                android:layout_width="60dp"
-                android:layout_height="60dp"
-                android:src="@drawable/ic_fitness"
-                app:tint="@color/robomove_navy"/>
+            android:background="@drawable/bg_info_card_purple"
+            android:padding="20dp">
 
             <TextView
-                android:layout_width="274dp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="💪"
+                android:textSize="56sp"/>
+
+            <TextView
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:gravity="center"
                 android:text="Follow The Moves"
                 android:textAlignment="center"
                 android:textColor="@color/robomove_navy"
-                android:textSize="25sp"
+                android:textSize="26sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
+                android:layout_marginTop="6dp"
                 android:gravity="center"
                 android:text="Copy the move shown in the video"
                 android:textAlignment="center"
-                android:textColor="@color/robomove_navy"
+                android:textColor="#666666"
                 android:textSize="15sp" />
         </LinearLayout>
     </androidx.cardview.widget.CardView>
@@ -91,13 +93,13 @@
     <androidx.cardview.widget.CardView
         android:id="@+id/card_reps"
         android:layout_width="0dp"
-        android:layout_height="160dp"
-        app:cardCornerRadius="24dp"
-        app:cardElevation="0dp"
-        app:cardBackgroundColor="#E8D5F5"
-        android:layout_marginStart="32dp"
-        android:layout_marginEnd="32dp"
-        android:layout_marginTop="48dp"
+        android:layout_height="180dp"
+        app:cardCornerRadius="28dp"
+        app:cardElevation="6dp"
+        app:cardBackgroundColor="@color/robomove_white"
+        android:layout_marginStart="40dp"
+        android:layout_marginEnd="40dp"
+        android:layout_marginTop="56dp"
         app:layout_constraintStart_toEndOf="@id/card_follow"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toBottomOf="@id/tv_title">
@@ -107,33 +109,34 @@
             android:layout_height="match_parent"
             android:gravity="center"
             android:orientation="vertical"
-            android:padding="16dp">
-
-            <ImageView
-                android:layout_width="60dp"
-                android:layout_height="60dp"
-                android:src="@drawable/ic_trophy"
-                app:tint="@color/robomove_navy"/>
+            android:background="@drawable/bg_info_card_blue"
+            android:padding="20dp">
 
             <TextView
-                android:layout_width="279dp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🏆"
+                android:textSize="56sp"/>
+
+            <TextView
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:gravity="center"
                 android:text="Complete Reps"
                 android:textAlignment="center"
                 android:textColor="@color/robomove_navy"
-                android:textSize="25sp"
+                android:textSize="26sp"
                 android:textStyle="bold" />
 
             <TextView
-                android:layout_width="235dp"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
+                android:layout_marginTop="6dp"
                 android:gravity="center"
                 android:text="Complete 5 reps for each exercise"
                 android:textAlignment="center"
-                android:textColor="@color/robomove_navy"
+                android:textColor="#666666"
                 android:textSize="15sp" />
         </LinearLayout>
     </androidx.cardview.widget.CardView>
@@ -142,13 +145,13 @@
     <androidx.cardview.widget.CardView
         android:id="@+id/card_voice"
         android:layout_width="0dp"
-        android:layout_height="170dp"
-        app:cardCornerRadius="24dp"
-        app:cardElevation="0dp"
-        app:cardBackgroundColor="#E8D5F5"
-        android:layout_marginStart="32dp"
-        android:layout_marginEnd="32dp"
-        android:layout_marginTop="40dp"
+        android:layout_height="190dp"
+        app:cardCornerRadius="28dp"
+        app:cardElevation="6dp"
+        app:cardBackgroundColor="@color/robomove_white"
+        android:layout_marginStart="40dp"
+        android:layout_marginEnd="40dp"
+        android:layout_marginTop="48dp"
         app:layout_constraintTop_toBottomOf="@id/card_follow"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
@@ -158,13 +161,14 @@
             android:layout_height="match_parent"
             android:orientation="vertical"
             android:gravity="center"
-            android:padding="16dp">
+            android:background="@drawable/bg_info_card_teal"
+            android:padding="20dp">
 
-            <ImageView
-                android:layout_width="50dp"
-                android:layout_height="50dp"
-                android:src="@drawable/ic_mic"
-                app:tint="@color/robomove_navy"/>
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🎤"
+                android:textSize="56sp"/>
 
             <TextView
                 android:layout_width="wrap_content"
@@ -172,16 +176,19 @@
                 android:layout_marginTop="8dp"
                 android:text="Voice Commands"
                 android:textColor="@color/robomove_navy"
-                android:textSize="25sp"
+                android:textSize="26sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
                 android:gravity="center"
                 android:text="Say 'Robomove Start', 'Pause', 'Play', or 'Stop' to control the game."
-                android:textColor="@color/robomove_navy"
-                android:textSize="15sp" />
+                android:textAlignment="center"
+                android:textColor="#666666"
+                android:textSize="15sp"
+                android:lineSpacingMultiplier="1.2"/>
         </LinearLayout>
     </androidx.cardview.widget.CardView>
 
@@ -189,15 +196,17 @@
     <TextView
         android:id="@+id/btn_say_start"
         android:layout_width="0dp"
-        android:layout_height="65dp"
-        android:layout_marginStart="32dp"
-        android:layout_marginEnd="32dp"
-        android:layout_marginTop="48dp"
+        android:layout_height="80dp"
+        android:layout_marginStart="40dp"
+        android:layout_marginEnd="40dp"
+        android:layout_marginTop="56dp"
         android:background="@drawable/bg_button_yellow"
         android:gravity="center"
         android:text='Say "Robomove Start" to Begin!'
-        android:textSize="20sp"
+        android:textSize="24sp"
+        android:textStyle="bold"
         android:textColor="@color/robomove_white"
+        android:elevation="8dp"
         app:layout_constraintTop_toBottomOf="@id/card_voice"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
