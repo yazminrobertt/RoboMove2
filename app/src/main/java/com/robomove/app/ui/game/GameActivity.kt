@@ -50,6 +50,7 @@ class GameActivity : AppCompatActivity() {
     private var currentReps     = 0
     private var scoreManager    = ScoreManager()
     private var isPlaying       = true
+    private var scoreAtLevelStart = 0
 
     private val currentLevel    get() = allLevels[levelIndex]
     private val currentExercise get() = currentLevel.exercises[exerciseIndex]
@@ -89,7 +90,9 @@ class GameActivity : AppCompatActivity() {
 
         levelIndex    = intent.getIntExtra(EXTRA_LEVEL_INDEX, 0)
         scoreManager = ScoreManager()
-        scoreManager.restoreScore(intent.getIntExtra(EXTRA_TOTAL_SCORE, 0))
+        val incomingScore = intent.getIntExtra(EXTRA_TOTAL_SCORE, 0)
+        scoreManager.restoreScore(incomingScore)
+        scoreAtLevelStart=incomingScore
 
         bindViews()
         setupManagers()
@@ -376,6 +379,8 @@ class GameActivity : AppCompatActivity() {
     private fun pauseGame() {
         isPlaying = false
         voiceManager.stopListening()
+        feedbackManager.stopSpeaking()   // ← stop TTS immediately
+        mediaPlayer?.pause()             // ← also pause the demo video
         Log.d(TAG, "Game paused")
 
         val intent = Intent(this, PauseActivity::class.java).apply {
@@ -416,16 +421,22 @@ class GameActivity : AppCompatActivity() {
                 PauseActivity.ACTION_RESUME -> {
                     isPlaying = true
                     voiceManager.startListening()
+                    mediaPlayer?.start()
                     Log.d(TAG, "Game resumed")
                 }
                 PauseActivity.ACTION_RESTART_LEVEL -> {
-                    // Reset exercise index back to 0, keep total score
                     exerciseIndex = 0
                     currentReps   = 0
                     isPlaying     = true
+                    // Roll score back to what it was at the start of this level
+                    scoreManager.restoreScore(scoreAtLevelStart)
+                    tvScore.text = scoreManager.totalScore.toString()
+                    Log.d(TAG, "Level restarted — score rolled back to $scoreAtLevelStart")
                     voiceManager.startListening()
-                    loadCurrentExercise()
-                    Log.d(TAG, "Level restarted from exercise 0")
+                    stopDemoVideo()
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                        loadCurrentExercise()
+                    }, 300)
                 }
             }
         }

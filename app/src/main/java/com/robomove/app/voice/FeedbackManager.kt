@@ -125,12 +125,40 @@ class FeedbackManager(context: Context) {
         speakImmediate("Level $levelNumber complete! Your score is $score. Amazing work!")
     }
 
-    fun speakGameComplete(totalScore: Int) {
-        speakImmediate("You finished all levels! Your total score is $totalScore. You are a champion!")
+    fun speakGameComplete(totalScore: Int, endedEarly: Boolean = false) {
+        val message = when {
+            endedEarly && totalScore == 0 ->
+                "Game over! Your score is zero. Keep practising and try again!"
+            endedEarly ->
+                "Game ended early. Your score is $totalScore. Come back and finish next time!"
+            totalScore == 0 ->
+                "You finished all levels! Keep practising to score some points next time!"
+            totalScore < 200 ->
+                "You finished all levels! Your score is $totalScore. Keep it up, you are improving!"
+            totalScore < 400 ->
+                "Great effort! Your score is $totalScore. You are getting stronger!"
+            totalScore < 600 ->
+                "Amazing work! Your score is $totalScore. You are nearly a champion!"
+            else ->
+                "You finished all levels! Your score is $totalScore. You are a champion!"
+        }
+        speakImmediate(message)
     }
 
     fun speakCustom(message: String) {
         speakImmediate(message)
+    }
+
+    /**
+     * Stops any currently speaking audio immediately.
+     * Does NOT destroy the TTS engine — speaking can resume afterwards.
+     * Call this when pausing the game.
+     */
+    fun stopSpeaking() {
+        tts?.stop()
+        // Reset the instruction lockout so feedback doesn't stay blocked after resume
+        instructionSpokenAt = 0L
+        Log.d(TAG, "TTS speaking stopped")
     }
 
     fun shutdown() {
@@ -205,8 +233,8 @@ class FeedbackManager(context: Context) {
             ExerciseType.BOTH_HANDS_UP      -> "Raise both arms above your head."
             ExerciseType.TOUCH_SHOULDERS    -> "Bring your hands to your shoulders."
             ExerciseType.ARM_CIRCLES        -> "Stretch your arms out and make big circles."
-            ExerciseType.SIDE_STRETCH_LEFT  -> "Lean your body gently to the left."
-            ExerciseType.SIDE_STRETCH_RIGHT -> "Lean your body gently to the right."
+            ExerciseType.SIDE_STRETCH_LEFT  -> "Lean your body gently to the right."
+            ExerciseType.SIDE_STRETCH_RIGHT -> "Lean your body gently to the left."
             ExerciseType.KNEE_LIFT_LEFT     -> "Lift your left knee up."
             ExerciseType.KNEE_LIFT_RIGHT    -> "Lift your right knee up."
             ExerciseType.CROSS_BODY_LEFT    -> "Reach your right hand to your left knee."

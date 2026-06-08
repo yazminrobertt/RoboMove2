@@ -69,14 +69,14 @@ object LevelRepository {
             Exercise(
                 type = ExerciseType.SIDE_STRETCH_LEFT,
                 displayName = "Side Stretch Left",
-                instruction = "Raise your right arm and lean your body to the RIGHT!",
+                instruction = "Raise your left arm and lean your body to the RIGHT!",
                 description = "Place your right hand on your hip. Raise your left arm above your head and lean to the right.",
                 videoFileName = "side_stretch_left"
             ),
             Exercise(
                 type = ExerciseType.SIDE_STRETCH_RIGHT,
                 displayName = "Side Stretch Right",
-                instruction = "Raise your left arm and lean your body to the RIGHT!",
+                instruction = "Raise your right arm and lean your body to the LEFT!",
                 description = "Place your left hand on your hip. Raise your right arm above your head and lean to the left.",
                 videoFileName = "side_stretch_right"
             ),

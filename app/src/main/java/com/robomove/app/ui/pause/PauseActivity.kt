@@ -76,14 +76,13 @@ class PauseActivity : AppCompatActivity() {
         val levelIndex = intent.getIntExtra(EXTRA_LEVEL_INDEX, 0)
         val totalScore = intent.getIntExtra(EXTRA_TOTAL_SCORE, 0)
 
-        // Go to LevelComplete screen marked as game over
         val intent = Intent(this, LevelCompleteActivity::class.java).apply {
             putExtra(LevelCompleteActivity.EXTRA_LEVEL_INDEX,  levelIndex)
             putExtra(LevelCompleteActivity.EXTRA_TOTAL_SCORE,  totalScore)
-            putExtra(LevelCompleteActivity.EXTRA_IS_GAME_OVER, true)
+            putExtra(LevelCompleteActivity.EXTRA_IS_GAME_OVER, false)
+            putExtra(LevelCompleteActivity.EXTRA_ENDED_EARLY,  true)   // ← ADD
         }
         startActivity(intent)
-        // Clear back stack so user cannot return to game
         finishAffinity()
     }
 
