@@ -33,6 +33,7 @@ import com.robomove.app.R
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.result.contract.ActivityResultContracts
+import com.robomove.app.utils.SkipConfirmationDialog
 
 class GameActivity : AppCompatActivity() {
 
@@ -119,9 +120,12 @@ class GameActivity : AppCompatActivity() {
         tvDemoPlaceholder = findViewById(R.id.tv_demo_placeholder)
         tvExerciseDescription = findViewById(R.id.tv_exercise_description)
 
-
         findViewById<TextView>(R.id.btn_pause).setOnClickListener {
             pauseGame()
+        }
+
+        findViewById<TextView>(R.id.btn_skip).setOnClickListener {
+            showSkipConfirmation()
         }
     }
 
@@ -372,6 +376,7 @@ class GameActivity : AppCompatActivity() {
         when (command) {
             VoiceCommand.PAUSE -> pauseGame()
             VoiceCommand.STOP  -> showStopConfirmation()
+            VoiceCommand.SKIP  -> showSkipConfirmation()
             else -> {}
         }
     }
@@ -404,6 +409,47 @@ class GameActivity : AppCompatActivity() {
                 mediaPlayer?.start()
             }
         ).show()
+    }
+
+    private fun showSkipConfirmation() {
+        // Don't show if already on last exercise of level — nothing to skip to
+        if (exerciseIndex >= currentLevel.exercises.size - 1) {
+            feedbackManager.speakCustom("This is the last exercise in the level!")
+            Log.d(TAG, "Skip ignored — already on last exercise")
+            return
+        }
+
+        isPlaying = false
+        voiceManager.stopListening()
+        feedbackManager.stopSpeaking()
+
+        SkipConfirmationDialog(
+            context = this,
+            onYes   = { skipExercise() },
+            onNo    = {
+                // Resume everything
+                isPlaying = true
+                voiceManager.startListening()
+                mediaPlayer?.start()
+            }
+        ).show()
+    }
+
+    private fun skipExercise() {
+        Log.d(TAG, "Exercise skipped: ${currentExercise.displayName}")
+
+        // Stop current video before moving on
+        stopDemoVideo()
+
+        // Move to next exercise — no score awarded for skipped exercise
+        exerciseIndex++
+        currentReps = 0
+        isPlaying   = true
+        voiceManager.startListening()
+
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            loadCurrentExercise()
+        }, 300)
     }
 
     private fun goToHome() {

@@ -23,7 +23,7 @@ import android.util.Log
 
 // All possible voice commands the app understands
 enum class VoiceCommand {
-    START, PAUSE, PLAY, STOP, YES, NO, UNKNOWN
+    START, PAUSE, PLAY, STOP, SKIP, YES, NO, UNKNOWN
 }
 
 class VoiceManager(
@@ -117,12 +117,13 @@ class VoiceManager(
         Log.d(TAG, "Heard: \"$text\"")
 
         return when {
-            text.contains("start") -> VoiceCommand.START
-            text.contains("pause") -> VoiceCommand.PAUSE
-            text.contains("play") -> VoiceCommand.PLAY
-            text.contains("stop") -> VoiceCommand.STOP
-            text.contains("yes") -> VoiceCommand.YES
-            text.contains("no") -> VoiceCommand.NO
+            text.contains("robomove start") || text.contains("robot move start") || text.contains("start") -> VoiceCommand.START
+            text.contains("robomove pause") || text.contains("robot move pause") || text.contains("pause") -> VoiceCommand.PAUSE
+            text.contains("robomove play")  || text.contains("robot move play")  || text.contains("play")  -> VoiceCommand.PLAY
+            text.contains("robomove stop")  || text.contains("robot move stop")  || text.contains("stop")  -> VoiceCommand.STOP
+            text.contains("robomove skip")  || text.contains("robot move skip")  || text.contains("skip")  -> VoiceCommand.SKIP
+            text.contains("yes")                                                -> VoiceCommand.YES
+            text.contains("no")                                                 -> VoiceCommand.NO
             else -> VoiceCommand.UNKNOWN
         }
     }
