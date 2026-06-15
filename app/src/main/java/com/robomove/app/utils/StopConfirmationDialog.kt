@@ -15,6 +15,7 @@ import com.robomove.app.voice.VoiceManager
  * Asks the user to say "Yes" to confirm or "No" to cancel.
  * Also has tap buttons for accessibility.
  */
+
 class StopConfirmationDialog(
     context: Context,
     private val onYes: () -> Unit,
