@@ -6,7 +6,6 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.util.AttributeSet
 import android.view.View
-import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult
 
 /**
  * A transparent View placed ON TOP of the camera preview.
@@ -86,19 +85,27 @@ class PoseOverlayView @JvmOverloads constructor(
      * Call this every time PoseDetector returns a result.
      * Pass the raw landmark list (normalised x, y values).
      */
-    fun updatePose(result: PoseLandmarkerResult) {
-        if (result.landmarks().isEmpty()) {
+    fun updatePose(
+        pose: com.google.mlkit.vision.pose.Pose,
+        imageWidth: Int,
+        imageHeight: Int,
+        isFrontCamera: Boolean = true
+    ) {
+        val allLandmarks = pose.allPoseLandmarks
+        if (allLandmarks.isEmpty()) {
             landmarks = emptyList()
             postInvalidate()
             return
         }
-
-        // Extract x, y as pairs — these are 0..1 normalised values
-        landmarks = result.landmarks()[0].map { lm ->
-            Pair(lm.x(), lm.y())
+        landmarks = allLandmarks.map { lm ->
+            val normalizedX = lm.position.x / imageWidth
+            Pair(
+                // Front camera: mirror X so skeleton matches child's movement
+                // Back camera: no mirroring needed
+                if (isFrontCamera) 1f - normalizedX else normalizedX,
+                lm.position.y / imageHeight
+            )
         }
-
-        // Trigger a redraw on the UI thread
         postInvalidate()
     }
 
@@ -129,9 +136,9 @@ class PoseOverlayView @JvmOverloads constructor(
 
             // Mirror X because front camera flips horizontally
             canvas.drawLine(
-                (1f - x1) * viewWidth,
+                x1 * viewWidth,
                 y1 * viewHeight,
-                (1f - x2) * viewWidth,
+                x2 * viewWidth,
                 y2 * viewHeight,
                 bonePaint
             )
@@ -140,7 +147,7 @@ class PoseOverlayView @JvmOverloads constructor(
         // Draw joint dots on top
         for ((x, y) in landmarks) {
             canvas.drawCircle(
-                (1f - x) * viewWidth,   // mirror X
+                x * viewWidth,
                 y * viewHeight,
                 12f,
                 jointPaint

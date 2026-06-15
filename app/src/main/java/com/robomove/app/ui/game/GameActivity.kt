@@ -35,6 +35,7 @@ import android.content.pm.PackageManager
 import androidx.activity.result.contract.ActivityResultContracts
 import com.robomove.app.utils.SkipConfirmationDialog
 
+@androidx.camera.core.ExperimentalGetImage
 class GameActivity : AppCompatActivity() {
 
     companion object {
@@ -52,6 +53,7 @@ class GameActivity : AppCompatActivity() {
     private var scoreManager    = ScoreManager()
     private var isPlaying       = true
     private var scoreAtLevelStart = 0
+    private var isFrontCamera = false
 
     private val currentLevel    get() = allLevels[levelIndex]
     private val currentExercise get() = currentLevel.exercises[exerciseIndex]
@@ -272,10 +274,11 @@ class GameActivity : AppCompatActivity() {
     }
 
     private fun setupCamera() {
-        poseDetector = PoseDetector(this) { result, _, _ ->
+        poseDetector = PoseDetector(this) { pose, imageWidth, imageHeight ->
             if (isPlaying) {
-                poseOverlayView.updatePose(result)
-                val status = repCounter.processLandmarks(result)
+                repCounter.setImageDimensions(imageWidth, imageHeight, isFrontCamera)
+                poseOverlayView.updatePose(pose, imageWidth, imageHeight, isFrontCamera)
+                val status = repCounter.processLandmarks(pose)
                 Log.v(TAG, "Pose: $status")
             } else {
                 poseOverlayView.clearPose()
@@ -292,7 +295,7 @@ class GameActivity : AppCompatActivity() {
 
             val imageAnalyzer = ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
+                .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
                 .build()
                 .also {
                     it.setAnalyzer(cameraExecutor) { imageProxy ->
@@ -302,18 +305,56 @@ class GameActivity : AppCompatActivity() {
 
             try {
                 cameraProvider.unbindAll()
+
+                // Try front camera first, fall back to back camera
+                val cameraSelector = when {
+                    cameraProvider.hasCamera(CameraSelector.DEFAULT_FRONT_CAMERA) -> {
+                        Log.d(TAG, "Using front camera")
+                        isFrontCamera = true
+                        CameraSelector.DEFAULT_FRONT_CAMERA
+                    }
+                    cameraProvider.hasCamera(CameraSelector.DEFAULT_BACK_CAMERA) -> {
+                        Log.d(TAG, "Front camera not found — using back camera")
+                        isFrontCamera = false
+                        CameraSelector.DEFAULT_BACK_CAMERA
+                    }
+                    else -> {
+                        Log.e(TAG, "No camera available on this device")
+                        showNoCameraMessage()
+                        return@addListener
+                    }
+                }
+
                 cameraProvider.bindToLifecycle(
                     this,
-                    CameraSelector.DEFAULT_FRONT_CAMERA,
+                    cameraSelector,
                     preview,
                     imageAnalyzer
                 )
                 Log.d(TAG, "Camera bound successfully")
+
             } catch (e: Exception) {
                 Log.e(TAG, "Camera binding failed: ${e.message}")
+                showNoCameraMessage()
             }
 
         }, ContextCompat.getMainExecutor(this))
+    }
+
+    private fun showNoCameraMessage() {
+        runOnUiThread {
+            // Hide the camera preview area and show a message
+            cameraPreview.visibility = View.GONE
+            poseOverlayView.visibility = View.GONE
+
+            // Show placeholder text in camera card area
+            val placeholder = findViewById<TextView>(R.id.tv_demo_placeholder)
+            // Reuse existing placeholder or find camera card
+            Log.w(TAG, "No camera found — running without pose detection")
+
+            // Game still works — just no pose tracking
+            // Rep counting will be manual or disabled
+        }
     }
 
     // ─────────────────────────────────────────

@@ -8,14 +8,11 @@
     android:background="@color/robomove_white">
 
     <!-- Title -->
-
-    <!-- CIRCLE CONTAINER -->
-
     <TextView
         android:id="@+id/tv_get_ready"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="88dp"
+        android:layout_marginTop="72dp"
         android:text="GET READY!"
         android:textColor="@color/robomove_navy"
         android:textSize="62sp"
@@ -24,45 +21,50 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
+    <!-- Left image -->
     <ImageView
         android:id="@+id/img_left"
-        android:layout_width="420dp"
-        android:layout_height="580dp"
-        android:layout_marginStart="60dp"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginStart="8dp"
+        android:layout_marginEnd="160dp"
+        android:layout_marginTop="16dp"
+        android:layout_marginBottom="16dp"
         android:contentDescription="left image"
-        android:scaleType="fitCenter"
+        android:scaleType="fitEnd"
         android:src="@drawable/countdown_kid1"
         app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/tv_get_ready"
-        app:layout_constraintVertical_bias="0.0" />
+        app:layout_constraintTop_toBottomOf="@id/tv_get_ready" />
 
+    <!-- Right image -->
     <ImageView
         android:id="@+id/img_right"
-        android:layout_width="420dp"
-        android:layout_height="580dp"
-        android:layout_marginEnd="48dp"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginStart="160dp"
+        android:layout_marginEnd="8dp"
+        android:layout_marginTop="16dp"
+        android:layout_marginBottom="16dp"
         android:contentDescription="right image"
-        android:scaleType="fitCenter"
+        android:scaleType="fitStart"
         android:src="@drawable/countdown_kid2"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/tv_get_ready"
-        app:layout_constraintVertical_bias="0.0" />
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/tv_get_ready" />
 
+    <!-- Circle countdown -->
     <FrameLayout
         android:id="@+id/circle_container"
-        android:layout_width="320dp"
-        android:layout_height="320dp"
+        android:layout_width="340dp"
+        android:layout_height="340dp"
         app:layout_constraintTop_toBottomOf="@id/tv_get_ready"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintVertical_bias="0.45">
-
-        <!-- Circle background -->
-
-        <!-- Countdown number -->
+        app:layout_constraintVertical_bias="0.42">
 
         <View
             android:layout_width="match_parent"
@@ -88,9 +90,9 @@
         android:text="Get in position!"
         android:textColor="#888888"
         android:textSize="26sp"
+        android:layout_marginTop="20dp"
         app:layout_constraintTop_toBottomOf="@id/circle_container"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginTop="24dp"/>
+        app:layout_constraintEnd_toEndOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

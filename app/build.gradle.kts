@@ -16,7 +16,7 @@ android {
 
     defaultConfig {
         applicationId = "com.robomove.app"
-        minSdk = 26
+        minSdk = 23
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
@@ -52,7 +52,7 @@ dependencies {
     implementation(libs.androidx.navigation.ui)
     implementation(libs.androidx.lifecycle.viewmodel)
     implementation(libs.androidx.lifecycle.runtime)
-    implementation(libs.mediapipe.tasks.vision)
+    implementation(libs.mlkit.pose.detection)
     implementation(libs.camerax.core)
     implementation(libs.camerax.camera2)
     implementation(libs.camerax.lifecycle)

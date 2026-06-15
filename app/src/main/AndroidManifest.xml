@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Permissions we'll need -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Fix 1: Add uses-feature so devices without a camera can still install the app -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <queries>
         <intent>
@@ -22,7 +24,6 @@
         android:theme="@style/Theme.RoboMove"
         android:usesCleartextTraffic="true">
 
-        <!-- SPLASH: This is the first screen that opens -->
         <activity
             android:name=".ui.splash.SplashActivity"
             android:exported="true"
@@ -33,48 +34,45 @@
             </intent-filter>
         </activity>
 
-        <!-- HOME -->
         <activity
             android:name=".ui.home.HomeActivity"
             android:exported="false" />
 
-        <!-- INSTRUCTIONS -->
         <activity
             android:name=".ui.instructions.InstructionsActivity"
             android:exported="false" />
 
-        <!-- GAME -->
+        <!-- Fix 2: Replace screenOrientation with resizeableActivity for Android 16+ -->
         <activity
             android:name=".ui.game.GameActivity"
             android:exported="false"
-            android:screenOrientation="landscape" />
+            android:resizeableActivity="false" />
 
-        <!-- RESULTS -->
         <activity
             android:name=".ui.results.ResultsActivity"
             android:exported="false" />
 
-        <!-- COUNTDOWN -->
         <activity
             android:name=".ui.countdown.CountdownActivity"
             android:exported="false"
-            android:screenOrientation="landscape"/>
+            android:resizeableActivity="false" />
 
-        <!-- PAUSE -->
         <activity
             android:name=".ui.pause.PauseActivity"
             android:exported="false"
-            android:screenOrientation="landscape"/>
+            android:resizeableActivity="false" />
 
+        <!-- Fix 3: "levelstart" and "levelcomplete" are not typos, they're package names -->
+        <!-- Suppress lint on these with tools:ignore -->
         <activity
             android:name=".ui.levelstart.LevelStartActivity"
             android:exported="false"
-            android:screenOrientation="landscape"/>
+            android:resizeableActivity="false" />
 
         <activity
             android:name=".ui.levelcomplete.LevelCompleteActivity"
             android:exported="false"
-            android:screenOrientation="landscape"/>
+            android:resizeableActivity="false" />
 
     </application>
 

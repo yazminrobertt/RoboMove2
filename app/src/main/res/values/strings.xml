@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">RoboMove</string>
+    <string name="app_name">RoboMove(ML)</string>
     <string name="start_challenge">START CHALLENGE</string>
     <string name="lets_see">LET\'S SEE WHAT YOU\'VE GOT</string>
     <string name="say_start">Say "START" to begin</string>
