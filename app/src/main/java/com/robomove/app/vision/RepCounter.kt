@@ -35,9 +35,9 @@ class RepCounter(
 
     // ── Debounce ──
     private var upPositionStartTime  = 0L
-    private val UP_HOLD_MS           = 400L
+    private val UP_HOLD_MS           = 200L   // was 400 — lower for knee lifts
     private var lastRepCompletedTime = 0L
-    private val REP_COOLDOWN_MS      = 800L
+    private val REP_COOLDOWN_MS      = 600L   // was 800
 
     // ── Image dimensions for normalising ML Kit pixel coords ──
     private var imageWidth  = 1
@@ -187,10 +187,7 @@ class RepCounter(
         val rightShoulderX = x(pose, rightShoulderIdx)
         val rightShoulderY = y(pose, rightShoulderIdx)
 
-        val leftExtended  = leftShoulderX - leftWristX > 0.16f
-        val rightExtended = rightWristX - rightShoulderX > 0.16f
-        val isInTPose     = leftExtended && rightExtended
-
+        // Distance from wrist to shoulder
         val leftDistance = Math.sqrt(
             ((leftWristX - leftShoulderX).toDouble().let { it * it } +
                     (leftWristY - leftShoulderY).toDouble().let { it * it })
@@ -201,13 +198,32 @@ class RepCounter(
                     (rightWristY - rightShoulderY).toDouble().let { it * it })
         ).toFloat()
 
-        val isTouching = leftDistance < 0.22f && rightDistance < 0.22f
+        // Rest = arms hanging at sides (wrists below shoulders)
+        val isAtRest = leftWristY > leftShoulderY && rightWristY > rightShoulderY
 
-        if (isInTPose) hasShownRestPosition = true
-        if (!hasShownRestPosition) return "Waiting for T-pose rest position"
-        if (!isTouching) maybeFeedback("Bring your hands to your shoulders!")
+        // Touching = wrists close to shoulders
+        val isTouching = leftDistance < 0.25f && rightDistance < 0.25f
 
-        return countRepDirect(isUp = isTouching, qualityHint = if (isTouching) "CORRECT" else "LOW")
+        if (isAtRest) hasShownRestPosition = true
+
+        Log.d(TAG, "TouchShoulders | " +
+                "L=${"%.3f".format(leftDistance)} " +
+                "R=${"%.3f".format(rightDistance)} " +
+                "touching=$isTouching " +
+                "atRest=$isAtRest " +
+                "hasRest=$hasShownRestPosition")
+
+        if (!hasShownRestPosition) return "Waiting for rest position"
+        if (!isTouching) maybeFeedback("Bring your hands up to your shoulders!")
+
+        return countRepDirect(
+            isUp        = isTouching,
+            qualityHint = when {
+                leftDistance < 0.15f && rightDistance < 0.15f -> "CORRECT"
+                isTouching -> "SLIGHT"
+                else       -> "LOW"
+            }
+        )
     }
 
     private fun checkArmCircles(pose: Pose): String {
@@ -252,21 +268,26 @@ class RepCounter(
     }
 
     private fun checkKneeLift(pose: Pose, isLeft: Boolean): String {
-        val kneeIdx      = if (isLeft) resolveLeft(PoseDetector.LEFT_KNEE, PoseDetector.RIGHT_KNEE)
+        val kneeIdx = if (isLeft) resolveLeft(PoseDetector.LEFT_KNEE, PoseDetector.RIGHT_KNEE)
         else        resolveRight(PoseDetector.LEFT_KNEE, PoseDetector.RIGHT_KNEE)
-        val hipIdx       = if (isLeft) resolveLeft(PoseDetector.LEFT_HIP, PoseDetector.RIGHT_HIP)
+        val hipIdx  = if (isLeft) resolveLeft(PoseDetector.LEFT_HIP, PoseDetector.RIGHT_HIP)
         else        resolveRight(PoseDetector.LEFT_HIP, PoseDetector.RIGHT_HIP)
-        val side         = if (isLeft) "left" else "right"
+        val side    = if (isLeft) "left" else "right"
+
         val kneeAboveHip = y(pose, hipIdx) - y(pose, kneeIdx)
-        val isUp         = kneeAboveHip > 0.05f
+        val isUp = kneeAboveHip > 0.03f
+
+        Log.d("KneeLift", "$side | diff=${"%.3f".format(kneeAboveHip)} isUp=$isUp")
 
         if (!isUp) maybeFeedback("Lift your $side knee higher!")
+
         return countRepDirect(
             isUp        = isUp,
-            qualityHint = if (kneeAboveHip > 0.12f) "CORRECT"
+            qualityHint = if (kneeAboveHip > 0.10f) "CORRECT"
             else if (isUp) "SLIGHT" else "LOW"
         )
     }
+
 
     private fun checkCrossBody(pose: Pose, isLeft: Boolean): String {
         // isLeft = touch left knee with right hand

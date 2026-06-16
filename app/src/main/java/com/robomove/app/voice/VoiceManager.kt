@@ -1,61 +1,61 @@
 package com.robomove.app.voice
 
 import android.content.Context
-import android.content.Intent
-import android.os.Bundle
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
+import android.content.res.AssetManager
 import android.util.Log
-
-/**
- * VoiceManager handles all speech recognition for the RoboMove app.
- * It listens continuously and fires a callback when a known command is heard.
- *
- * Supported commands:
- *   "robomove start"  → VoiceCommand.START
- *   "robomove pause"  → VoiceCommand.PAUSE
- *   "robomove play"   → VoiceCommand.PLAY
- *   "robomove stop"   → VoiceCommand.STOP
- *   "yes"             → VoiceCommand.YES  (for stop confirmation)
- *   "no"              → VoiceCommand.NO   (for stop confirmation)
- */
-
-// All possible voice commands the app understands
-enum class VoiceCommand {
-    START, PAUSE, PLAY, STOP, SKIP, YES, NO, UNKNOWN
-}
+import org.vosk.Model
+import org.vosk.Recognizer
+import org.vosk.android.RecognitionListener
+import org.vosk.android.SpeechService
 
 class VoiceManager(
     private val context: Context,
     private val onCommandDetected: (VoiceCommand) -> Unit
 ) {
 
-    private var speechRecognizer: SpeechRecognizer? = null
-    private var isListening = false
-    private var shouldKeepListening = false  // controls auto-restart loop
-
     companion object {
         private const val TAG = "VoiceManager"
+        private const val MODEL_PATH = "model"
+        private const val SAMPLE_RATE = 16000.0f
+    }
+
+    private var model: Model? = null
+    private var speechService: SpeechService? = null
+    private var isListening = false
+    private var shouldKeepListening = false
+    private var isModelLoaded = false
+
+    // Prevents double-firing from partial + final result
+    private var lastCommandTime = 0L
+    private val COMMAND_COOLDOWN_MS = 1500L
+
+    init {
+        loadModelAsync()
     }
 
     // ─────────────────────────────────────────
-    // PUBLIC FUNCTIONS
+    // PUBLIC — same interface as original
     // ─────────────────────────────────────────
 
-    /** Call this to start listening. It will keep restarting automatically. */
     fun startListening() {
         shouldKeepListening = true
+        if (!isModelLoaded) {
+            Log.w(TAG, "Model not ready yet — will start when ready")
+            return
+        }
+        if (isListening) {
+            Log.d(TAG, "Already listening — ignoring startListening()")
+            return
+        }
         createAndStartRecognizer()
         Log.d(TAG, "START LISTENING CALLED")
     }
 
-    /** Call this to fully stop listening (e.g. when leaving a screen) */
     fun stopListening() {
         shouldKeepListening = false
         isListening = false
-        speechRecognizer?.destroy()
-        speechRecognizer = null
+        destroyRecognizer()
+        Log.d(TAG, "Stopped listening")
     }
 
     // ─────────────────────────────────────────
@@ -63,44 +63,37 @@ class VoiceManager(
     // ─────────────────────────────────────────
 
     private fun createAndStartRecognizer() {
-        // Destroy old one first to avoid leaks
-        speechRecognizer?.destroy()
+        // Destroy old one first — same as original
+        destroyRecognizer()
 
-        if (!SpeechRecognizer.isRecognitionAvailable(context)) {
-            Log.e(TAG, "Speech recognition not available on this device")
-            return
+        try {
+            val recognizer = Recognizer(model, SAMPLE_RATE)
+            speechService = SpeechService(recognizer, SAMPLE_RATE)
+            speechService?.startListening(recognitionListener)
+            isListening = true
+            Log.d(TAG, "Started listening...")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start recognizer: ${e.message}")
+            isListening = false
         }
-
-        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
-        speechRecognizer?.setRecognitionListener(recognitionListener)
-
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
-            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
-            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-            putExtra("android.speech.extra.DICTATION_MODE", true)
-
-            // How long to wait after speech goes silent before cutting off
-            putExtra("android.speech.extra.SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS", 2000L)
-            // How long to wait if speech MIGHT still be continuing
-            putExtra("android.speech.extra.SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS", 2000L)
-            // Minimum time it must listen before it can cut off at all
-            putExtra("android.speech.extra.SPEECH_INPUT_MINIMUM_LENGTH_MILLIS", 4000L)
-        }
-
-        speechRecognizer?.startListening(intent)
-        isListening = true
-        Log.d(TAG, "Started listening...")
     }
 
-    /** Restart after a result or error — keeps the loop going */
+    private fun destroyRecognizer() {
+        try {
+            speechService?.stop()
+            speechService?.shutdown()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error destroying recognizer: ${e.message}")
+        }
+        speechService = null
+        isListening = false
+    }
+
+    /** Same as original — restarts after result or error */
     private fun restartIfNeeded() {
         if (shouldKeepListening) {
-            // Small delay before restarting to avoid rapid loops
             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                if (shouldKeepListening) {
+                if (shouldKeepListening && !isListening) {
                     createAndStartRecognizer()
                 }
             }, 500)
@@ -108,11 +101,84 @@ class VoiceManager(
     }
 
     // ─────────────────────────────────────────
+    // PRIVATE — MODEL LOADING
+    // ─────────────────────────────────────────
+
+    private fun loadModelAsync() {
+        Thread {
+            try {
+                Log.d(TAG, "Loading Vosk model from assets/model...")
+
+                val outputDir = java.io.File(context.filesDir, "vosk-model")
+
+                if (!outputDir.exists() || outputDir.listFiles().isNullOrEmpty()) {
+                    outputDir.mkdirs()
+                    copyAssetFolder(context.assets, MODEL_PATH, outputDir.absolutePath)
+                    Log.d(TAG, "Model copied to: ${outputDir.absolutePath}")
+                } else {
+                    Log.d(TAG, "Model already exists at: ${outputDir.absolutePath}")
+                }
+
+                model = Model(outputDir.absolutePath)
+                isModelLoaded = true
+                Log.d(TAG, "Vosk model loaded successfully")
+
+                // If startListening was called before model was ready, start now
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    if (shouldKeepListening && !isListening) {
+                        createAndStartRecognizer()
+                    }
+                }
+
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to load Vosk model: ${e.message}")
+            }
+        }.start()
+    }
+
+    private fun copyAssetFolder(
+        assetManager: AssetManager,
+        assetPath: String,
+        destPath: String
+    ) {
+        val files = assetManager.list(assetPath) ?: return
+        val destDir = java.io.File(destPath)
+        if (!destDir.exists()) destDir.mkdirs()
+
+        for (file in files) {
+            val srcPath = "$assetPath/$file"
+            val dstPath = "$destPath/$file"
+            val subFiles = assetManager.list(srcPath)
+            if (!subFiles.isNullOrEmpty()) {
+                copyAssetFolder(assetManager, srcPath, dstPath)
+            } else {
+                copyAssetFile(assetManager, srcPath, dstPath)
+            }
+        }
+    }
+
+    private fun copyAssetFile(
+        assetManager: AssetManager,
+        srcPath: String,
+        dstPath: String
+    ) {
+        try {
+            assetManager.open(srcPath).use { input ->
+                java.io.FileOutputStream(dstPath).use { output ->
+                    input.copyTo(output)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to copy $srcPath: ${e.message}")
+        }
+    }
+
+    // ─────────────────────────────────────────
     // PRIVATE — PARSE TEXT INTO COMMANDS
+    // Same logic as original VoiceManager
     // ─────────────────────────────────────────
 
     private fun parseCommand(spokenText: String): VoiceCommand {
-        // Lowercase and trim so matching is not case-sensitive
         val text = spokenText.lowercase().trim()
         Log.d(TAG, "Heard: \"$text\"")
 
@@ -122,75 +188,110 @@ class VoiceManager(
             text.contains("robomove play")  || text.contains("robot move play")  || text.contains("play")  -> VoiceCommand.PLAY
             text.contains("robomove stop")  || text.contains("robot move stop")  || text.contains("stop")  -> VoiceCommand.STOP
             text.contains("robomove skip")  || text.contains("robot move skip")  || text.contains("skip")  -> VoiceCommand.SKIP
-            text.contains("yes")                                                -> VoiceCommand.YES
-            text.contains("no")                                                 -> VoiceCommand.NO
+            text.contains("yes")                                                 -> VoiceCommand.YES
+            text.contains("no")                                                  -> VoiceCommand.NO
             else -> VoiceCommand.UNKNOWN
         }
     }
 
     // ─────────────────────────────────────────
-    // RECOGNITION LISTENER (Android callbacks)
+    // RECOGNITION LISTENER
+    // Matches original structure — onResults fires
+    // command, onPartialResult for fast response,
+    // errors restart just like original
     // ─────────────────────────────────────────
 
     private val recognitionListener = object : RecognitionListener {
 
-        override fun onResults(results: Bundle?) {
-            isListening = false
-            val matches = results
-                ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                ?: return
+        override fun onPartialResult(hypothesis: String?) {
+            hypothesis ?: return
+            val text = extractText(hypothesis)
+            if (text.isEmpty()) return
 
-            // Try each result until we find a known command
-            for (result in matches) {
-                val command = parseCommand(result)
-                if (command != VoiceCommand.UNKNOWN) {
-                    Log.d(TAG, "Command detected: $command from \"$result\"")
-                    onCommandDetected(command)
-                    break
-                }
-            }
-
-            // Keep listening after getting a result
-            restartIfNeeded()
-        }
-
-        override fun onPartialResults(partialResults: Bundle?) {
-            // Check partial results too for faster response
-            val partial = partialResults
-                ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                ?.firstOrNull() ?: return
-
-            val command = parseCommand(partial)
+            val command = parseCommand(text)
             if (command != VoiceCommand.UNKNOWN) {
-                Log.d(TAG, "Partial command detected: $command")
-                onCommandDetected(command)
+                fireCommand(command)
             }
         }
 
-        override fun onError(error: Int) {
+        override fun onResult(hypothesis: String?) {
             isListening = false
-            val errorMsg = when (error) {
-                SpeechRecognizer.ERROR_NO_MATCH        -> "No match"
-                SpeechRecognizer.ERROR_SPEECH_TIMEOUT  -> "Timeout"
-                SpeechRecognizer.ERROR_AUDIO           -> "Audio error"
-                SpeechRecognizer.ERROR_NETWORK         -> "Network error"
-                else -> "Error code $error"
+            hypothesis ?: return
+            val text = extractText(hypothesis)
+            if (text.isEmpty()) {
+                restartIfNeeded()
+                return
             }
-            Log.d(TAG, "Recognition error: $errorMsg — restarting")
-            Log.e(TAG, "ERROR: $error")
-            // Restart on error (timeout is normal, happens when silent)
+
+            val command = parseCommand(text)
+            if (command != VoiceCommand.UNKNOWN) {
+                Log.d(TAG, "Command detected: $command from \"$text\"")
+                fireCommand(command)
+            }
+
+            // Keep listening after result — same as original
             restartIfNeeded()
         }
 
-        // ── We don't need these but must implement them ──
-        override fun onReadyForSpeech(params: Bundle?) {
-            Log.d(TAG, "Ready for speech")
-            Log.d(TAG, "MIC READY")
+        override fun onFinalResult(hypothesis: String?) {
+            // onResult already handles this — do nothing here
+            // to avoid double firing
         }
-        override fun onBeginningOfSpeech() {}
-        override fun onRmsChanged(rmsdB: Float) {}
-        override fun onBufferReceived(buffer: ByteArray?) {}
-        override fun onEndOfSpeech() { isListening = false }
-        override fun onEvent(eventType: Int, params: Bundle?) {}
+
+        override fun onError(exception: Exception?) {
+            isListening = false
+            Log.d(TAG, "Recognition error: ${exception?.message} — restarting")
+            restartIfNeeded()
+        }
+
+        override fun onTimeout() {
+            isListening = false
+            Log.d(TAG, "Timeout — restarting")
+            restartIfNeeded()
+        }
+    }
+
+    // ─────────────────────────────────────────
+    // FIRE COMMAND — with cooldown to prevent
+    // double-firing from partial + final
+    // ─────────────────────────────────────────
+
+    private fun fireCommand(command: VoiceCommand) {
+        val now = System.currentTimeMillis()
+        if (now - lastCommandTime < COMMAND_COOLDOWN_MS) {
+            Log.d(TAG, "Command cooldown — ignoring duplicate: $command")
+            return
+        }
+        lastCommandTime = now
+
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            onCommandDetected(command)
+        }
+    }
+
+    // ─────────────────────────────────────────
+    // TEXT EXTRACTION FROM VOSK JSON
+    // ─────────────────────────────────────────
+
+    private fun extractText(hypothesis: String): String {
+        return try {
+            when {
+                hypothesis.contains("\"partial\"") ->
+                    hypothesis
+                        .substringAfter("\"partial\"")
+                        .substringAfter("\"")
+                        .substringBefore("\"")
+                        .trim()
+                hypothesis.contains("\"text\"") ->
+                    hypothesis
+                        .substringAfter("\"text\"")
+                        .substringAfter("\"")
+                        .substringBefore("\"")
+                        .trim()
+                else -> hypothesis.trim()
+            }
+        } catch (e: Exception) {
+            hypothesis.trim()
+        }
     }
 }

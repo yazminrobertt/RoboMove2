@@ -54,6 +54,8 @@ class GameActivity : AppCompatActivity() {
     private var isPlaying       = true
     private var scoreAtLevelStart = 0
     private var isFrontCamera = false
+    private var lastImageWidth  = 1
+    private var lastImageHeight = 1
 
     private val currentLevel    get() = allLevels[levelIndex]
     private val currentExercise get() = currentLevel.exercises[exerciseIndex]
@@ -168,13 +170,14 @@ class GameActivity : AppCompatActivity() {
             exerciseType   = exercise.type,
             onRepCompleted = { quality -> onRepCompleted(quality) },
             onPoseFeedback = { _ ->
-                // Re-connected: fire correction feedback through FeedbackManager
-                // FeedbackManager's CORRECTION_COOLDOWN_MS prevents spam
                 runOnUiThread {
                     feedbackManager.speakCorrection(exercise.type)
                 }
             }
         )
+
+        // Apply saved dimensions immediately so first frames are normalised correctly
+        repCounter.setImageDimensions(lastImageWidth, lastImageHeight, isFrontCamera)
 
         // Speak instruction
         // Note: for the very first exercise, this is called via the TTS ready callback
@@ -276,6 +279,8 @@ class GameActivity : AppCompatActivity() {
     private fun setupCamera() {
         poseDetector = PoseDetector(this) { pose, imageWidth, imageHeight ->
             if (isPlaying) {
+                lastImageWidth  = imageWidth
+                lastImageHeight = imageHeight
                 repCounter.setImageDimensions(imageWidth, imageHeight, isFrontCamera)
                 poseOverlayView.updatePose(pose, imageWidth, imageHeight, isFrontCamera)
                 val status = repCounter.processLandmarks(pose)
@@ -284,6 +289,7 @@ class GameActivity : AppCompatActivity() {
                 poseOverlayView.clearPose()
             }
         }
+
 
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
         cameraProviderFuture.addListener({
