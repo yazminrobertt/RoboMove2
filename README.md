@@ -68,20 +68,6 @@ RoboMove is organized into four core modules, coordinated by a central `GameActi
 
 Supporting components include `ScoreManager` (points tracking), `PoseOverlayView` (live skeleton rendering), `DamanHeadControl` (camera alignment via the Reeman AIDL service), and `CameraAlignmentActivity`.
 
-```
-Vision Pipeline                       Voice & Feedback
-CameraX -> PoseDetector                VoiceManager (Vosk)
-        -> RepCounter                  -> FeedbackManager (TTS)
-        |                                       |
-        v                                       v
-              GameActivity (central orchestrator)
-                        |
-        +---------------+----------------+
-        v                                v
-  LevelRepository                 DamanHeadControl
-  + ScoreManager                  (Reeman AIDL)
-```
-
 ## Exercises and Levels
 
 | Level | Exercise Count | Focus |
