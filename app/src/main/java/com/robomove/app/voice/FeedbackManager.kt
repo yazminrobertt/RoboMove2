@@ -27,6 +27,12 @@ class FeedbackManager(context: Context) {
     private var instructionDoneAt     = 0L
     private var correctRepCount       = 0
 
+    // ── NEW: fires every time maybeCheer() actually speaks an encouragement line.
+    // GameActivity hooks this to trigger the robot arm gesture in sync with the
+    // "Good job!" voice cheer, reusing the same every-2-correct-reps counter
+    // instead of maintaining a second one.
+    var onCheerTriggered: (() -> Unit)? = null
+
     init {
         tts = TextToSpeech(context.applicationContext) { status ->
             if (status == TextToSpeech.SUCCESS) {
@@ -167,6 +173,7 @@ class FeedbackManager(context: Context) {
         if (now - lastEncouragementTime < ENCOURAGEMENT_COOLDOWN_MS) return
         lastEncouragementTime = now
         speakImmediate(getEncouragement())
+        onCheerTriggered?.invoke()   // ← NEW: robot arm gesture fires alongside the voice cheer
     }
 
     private fun maybeCorrect(exerciseType: ExerciseType) {

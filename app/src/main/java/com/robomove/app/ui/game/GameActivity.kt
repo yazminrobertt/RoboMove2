@@ -5,6 +5,8 @@ import android.graphics.SurfaceTexture
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.Surface
 import android.view.TextureView
@@ -17,6 +19,7 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import com.robomove.app.model.*
+import com.robomove.app.robot.DamanArmControl
 import com.robomove.app.ui.levelcomplete.LevelCompleteActivity
 import com.robomove.app.ui.pause.PauseActivity
 import com.robomove.app.utils.ScoreManager
@@ -43,6 +46,10 @@ class GameActivity : AppCompatActivity() {
         const val EXTRA_LEVEL_INDEX = "level_index"
         const val EXTRA_TOTAL_SCORE = "total_score"
         const val REQUEST_PAUSE     = 1001
+
+        // How long (ms) after raising the arms before sending them back down.
+        // Tune this against the real Daman — see calibration notes.
+        private const val ARM_LOWER_DELAY_MS = 1200L
     }
 
     // ── Data ──
@@ -70,6 +77,10 @@ class GameActivity : AppCompatActivity() {
     private lateinit var poseDetector    : PoseDetector
     private lateinit var repCounter      : RepCounter
     private lateinit var cameraExecutor  : ExecutorService
+
+    // ── Robot ──
+    private lateinit var armControl : DamanArmControl
+    private val armHandler = Handler(Looper.getMainLooper())
 
     // ── Views ──
     private lateinit var tvScore           : TextView
@@ -139,6 +150,31 @@ class GameActivity : AppCompatActivity() {
     private fun setupManagers() {
         feedbackManager = FeedbackManager(this)
         cameraExecutor  = Executors.newSingleThreadExecutor()
+
+        // ── Robot arm control ──
+        // Same connect pattern as DamanHeadControl in CameraAlignmentActivity.
+        armControl = DamanArmControl(this)
+        armControl.onConnectionChanged = { connected ->
+            Log.d(TAG, "Arm service connected: $connected")
+        }
+        armControl.connect()
+
+        // ───────────────────────────────────────────────────────────────
+        // IMPORTANT: keep DRY_RUN = true until you've checked Logcat
+        // (tag "DamanArmControl") and confirmed the joint values in
+        // raiseBothArms()/lowerBothArms() actually match a safe "arms up"
+        // pose on the real Daman. Flip to false only after that.
+        DamanArmControl.DRY_RUN = false
+        // ───────────────────────────────────────────────────────────────
+
+        // Fire the arm gesture in sync with FeedbackManager's own
+        // every-2-correct-reps cheer — no separate counter needed here.
+        feedbackManager.onCheerTriggered = {
+            armControl.raiseBothArms(speed = 60)
+            armHandler.postDelayed({
+                armControl.lowerBothArms(speed = 60)
+            }, ARM_LOWER_DELAY_MS)
+        }
 
         voiceManager = VoiceManager(this) { command ->
             runOnUiThread { handleVoiceCommand(command) }
@@ -595,6 +631,8 @@ class GameActivity : AppCompatActivity() {
         feedbackManager.shutdown()
         poseDetector.close()
         cameraExecutor.shutdown()
+        armHandler.removeCallbacksAndMessages(null)
+        armControl.disconnect()
         Log.d(TAG, "GameActivity destroyed — resources cleaned up")
     }
 }
