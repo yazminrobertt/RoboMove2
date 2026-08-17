@@ -6,8 +6,8 @@ package com.robomove.app.model
  */
 object LevelRepository {
 
-    fun getAllLevels(): List<GameLevel> = listOf(
-        buildLevel1(),
+    fun getAllLevels(): List<GameLevel> = listOf( //get all exercise from each level, for game activity to use, bundles all exercise
+        buildLevel1(), //just isis data
         buildLevel2(),
         buildLevel3()
     )
@@ -62,7 +62,7 @@ object LevelRepository {
             Exercise(
                 type = ExerciseType.ARM_CIRCLES,
                 displayName = "Arm Circles",
-                instruction = "T-pose, then rotate your arms forward in big circles!",
+                instruction = "T-pose, then rotate your arms in big circles!",
                 description = "Start with your arm at your side. Move your arms forward to make a big circle.",
                 videoFileName = "arm_circles"
             ),

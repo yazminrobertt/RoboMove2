@@ -4,17 +4,11 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.os.Handler
+import android.os.Looper
 import android.util.AttributeSet
 import android.view.View
 
-/**
- * A transparent View placed ON TOP of the camera preview.
- * Every time new landmarks arrive, we call updatePose() and it redraws.
- *
- * It draws:
- *   - Dots on each body joint
- *   - Lines connecting joints (the skeleton)
- */
 class PoseOverlayView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
@@ -22,136 +16,104 @@ class PoseOverlayView @JvmOverloads constructor(
 ) : View(context, attrs, defStyleAttr) {
 
     companion object {
-        private const val TAG = "PoseOverlayView"
-
-        // Skeleton connections — pairs of landmark indices to draw lines between
-        // Based on MediaPipe Pose landmark map
         val SKELETON_CONNECTIONS = listOf(
-            // Torso
-            Pair(11, 12), // left shoulder  → right shoulder
-            Pair(11, 23), // left shoulder  → left hip
-            Pair(12, 24), // right shoulder → right hip
-            Pair(23, 24), // left hip       → right hip
-
-            // Left arm
-            Pair(11, 13), // left shoulder → left elbow
-            Pair(13, 15), // left elbow    → left wrist
-
-            // Right arm
-            Pair(12, 14), // right shoulder → right elbow
-            Pair(14, 16), // right elbow    → right wrist
-
-            // Left leg
-            Pair(23, 25), // left hip   → left knee
-            Pair(25, 27), // left knee  → left ankle
-
-            // Right leg
-            Pair(24, 26), // right hip  → right knee
-            Pair(26, 28), // right knee → right ankle
+            Pair(11, 12), Pair(11, 23), Pair(12, 24), Pair(23, 24),
+            Pair(11, 13), Pair(13, 15),
+            Pair(12, 14), Pair(14, 16),
+            Pair(23, 25), Pair(25, 27),
+            Pair(24, 26), Pair(26, 28),
         )
     }
 
-    // ── Paint brushes ──
     private val jointPaint = Paint().apply {
-        color       = Color.parseColor("#FFD700") // Gold dots
+        color       = Color.parseColor("#FFD700")
         style       = Paint.Style.FILL
         strokeWidth = 8f
         isAntiAlias = true
     }
 
     private val bonePaint = Paint().apply {
-        color       = Color.parseColor("#00E5FF") // Cyan lines
+        color       = Color.parseColor("#00E5FF")
         style       = Paint.Style.STROKE
         strokeWidth = 6f
         isAntiAlias = true
     }
 
-    private val missedPaint = Paint().apply {
-        color       = Color.parseColor("#FF5252") // Red when pose wrong
-        style       = Paint.Style.FILL
-        strokeWidth = 8f
-        isAntiAlias = true
-    }
+    // Use two arrays instead of list of pairs — avoids object allocation per frame
+    private var landmarkX = FloatArray(0)
+    private var landmarkY = FloatArray(0)
+    private var landmarkCount = 0
 
-    // ── State ──
-    private var landmarks: List<Pair<Float, Float>> = emptyList()
-    // landmark coords are normalised 0..1, we scale to view size when drawing
+    // Pre-computed screen coords — avoids multiply-per-draw
+    private var screenX = FloatArray(0)
+    private var screenY = FloatArray(0)
 
-    // ─────────────────────────────────────────
-    // PUBLIC — call from GameActivity on each frame
-    // ─────────────────────────────────────────
+    private val mainHandler = Handler(Looper.getMainLooper())
 
-    /**
-     * Call this every time PoseDetector returns a result.
-     * Pass the raw landmark list (normalised x, y values).
-     */
     fun updatePose(
         pose: com.google.mlkit.vision.pose.Pose,
         imageWidth: Int,
         imageHeight: Int,
         isFrontCamera: Boolean = true
     ) {
-        val allLandmarks = pose.allPoseLandmarks
-        if (allLandmarks.isEmpty()) {
-            landmarks = emptyList()
-            postInvalidate()
+        val all = pose.allPoseLandmarks
+        if (all.isEmpty()) {
+            landmarkCount = 0
+            mainHandler.post { invalidate() }
             return
         }
-        landmarks = allLandmarks.map { lm ->
-            val normalizedX = lm.position.x / imageWidth
-            Pair(
-                // Front camera: mirror X so skeleton matches child's movement
-                // Back camera: no mirroring needed
-                if (isFrontCamera) 1f - normalizedX else normalizedX,
-                lm.position.y / imageHeight
-            )
+
+        val count = all.size
+        if (landmarkX.size < count) {
+            landmarkX = FloatArray(count)
+            landmarkY = FloatArray(count)
+            screenX   = FloatArray(count)
+            screenY   = FloatArray(count)
         }
-        postInvalidate()
+
+        val w = imageWidth.toFloat()
+        val h = imageHeight.toFloat()
+
+        for (i in 0 until count) {
+            val lm = all[i]
+            val nx = lm.position.x / w
+            landmarkX[i] = if (isFrontCamera) 1f - nx else nx
+            landmarkY[i] = lm.position.y / h
+        }
+        landmarkCount = count
+
+        // Post invalidate on main thread — but do coord scaling here
+        // so onDraw just multiplies pre-normalised values by view size
+        mainHandler.post { invalidate() }
     }
 
-    /** Call this to clear the skeleton (e.g. when paused) */
     fun clearPose() {
-        landmarks = emptyList()
-        postInvalidate()
+        landmarkCount = 0
+        mainHandler.post { invalidate() }
     }
-
-    // ─────────────────────────────────────────
-    // DRAWING
-    // ─────────────────────────────────────────
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+        if (landmarkCount == 0) return
 
-        if (landmarks.isEmpty()) return
+        val vw = width.toFloat()
+        val vh = height.toFloat()
 
-        val viewWidth  = width.toFloat()
-        val viewHeight = height.toFloat()
-
-        // Draw skeleton lines first (so dots appear on top)
-        for ((startIdx, endIdx) in SKELETON_CONNECTIONS) {
-            if (startIdx >= landmarks.size || endIdx >= landmarks.size) continue
-
-            val (x1, y1) = landmarks[startIdx]
-            val (x2, y2) = landmarks[endIdx]
-
-            // Mirror X because front camera flips horizontally
-            canvas.drawLine(
-                x1 * viewWidth,
-                y1 * viewHeight,
-                x2 * viewWidth,
-                y2 * viewHeight,
-                bonePaint
-            )
+        // Scale to screen coords once
+        for (i in 0 until landmarkCount) {
+            screenX[i] = landmarkX[i] * vw
+            screenY[i] = landmarkY[i] * vh
         }
 
-        // Draw joint dots on top
-        for ((x, y) in landmarks) {
-            canvas.drawCircle(
-                x * viewWidth,
-                y * viewHeight,
-                12f,
-                jointPaint
-            )
+        // Draw bones first
+        for ((a, b) in SKELETON_CONNECTIONS) {
+            if (a >= landmarkCount || b >= landmarkCount) continue
+            canvas.drawLine(screenX[a], screenY[a], screenX[b], screenY[b], bonePaint)
+        }
+
+        // Draw joints on top
+        for (i in 0 until landmarkCount) {
+            canvas.drawCircle(screenX[i], screenY[i], 12f, jointPaint)
         }
     }
 }

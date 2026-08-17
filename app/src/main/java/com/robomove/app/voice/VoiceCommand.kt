@@ -12,5 +12,6 @@ enum class VoiceCommand {
     SKIP,
     YES,
     NO,
+    CONTINUE,
     UNKNOWN
 }

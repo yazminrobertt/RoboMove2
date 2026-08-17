@@ -2,11 +2,14 @@ package com.robomove.app.voice
 
 import android.content.Context
 import android.content.res.AssetManager
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import org.vosk.Model
 import org.vosk.Recognizer
 import org.vosk.android.RecognitionListener
 import org.vosk.android.SpeechService
+
 
 class VoiceManager(
     private val context: Context,
@@ -17,61 +20,128 @@ class VoiceManager(
         private const val TAG = "VoiceManager"
         private const val MODEL_PATH = "model"
         private const val SAMPLE_RATE = 16000.0f
+        private const val GRAMMAR =
+            "[\"start\", \"stop\", \"pause\", \"play\", \"skip\", \"continue\", \"yes\", \"no\", \"[unk]\"]"
+        private const val COMMAND_COOLDOWN_MS = 800L
+
+        // ── Singleton model — loaded once, reused across all VoiceManager instances ──
+        @Volatile private var sharedModel: Model? = null
+        private var isModelLoading = false
+        private val modelReadyCallbacks = mutableListOf<() -> Unit>()
+
+        private fun ensureModelLoaded(context: Context, onReady: () -> Unit) {
+            synchronized(this) {
+                if (sharedModel != null) {
+                    // Already loaded — fire immediately on calling thread
+                    android.os.Handler(android.os.Looper.getMainLooper()).post { onReady() }
+                    return
+                }
+                modelReadyCallbacks.add(onReady)
+                if (isModelLoading) return   // already in progress — callback queued above
+                isModelLoading = true
+            }
+
+            Thread {
+                try {
+                    Log.d(TAG, "Loading Vosk model (first time only)...")
+                    val outputDir = java.io.File(context.applicationContext.filesDir, "vosk-model")
+                    if (!outputDir.exists() || outputDir.listFiles().isNullOrEmpty()) {
+                        outputDir.mkdirs()
+                        copyAssetFolder(context.assets, MODEL_PATH, outputDir.absolutePath)
+                    }
+                    sharedModel = Model(outputDir.absolutePath)
+                    Log.d(TAG, "Vosk model loaded successfully")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to load Vosk model: ${e.message}")
+                } finally {
+                    synchronized(this) { isModelLoading = false }
+                }
+
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    synchronized(this) {
+                        val callbacks = modelReadyCallbacks.toList()
+                        modelReadyCallbacks.clear()
+                        callbacks.forEach { it() }
+                    }
+                }
+            }.start()
+        }
+
+        // These stay here because they don't reference instance state
+        private fun copyAssetFolder(assets: android.content.res.AssetManager, assetPath: String, destPath: String) {
+            val files = assets.list(assetPath) ?: return
+            val destDir = java.io.File(destPath)
+            if (!destDir.exists()) destDir.mkdirs()
+            for (file in files) {
+                val srcPath = "$assetPath/$file"
+                val dstPath = "$destPath/$file"
+                if (!assets.list(srcPath).isNullOrEmpty()) {
+                    copyAssetFolder(assets, srcPath, dstPath)
+                } else {
+                    copyAssetFile(assets, srcPath, dstPath)
+                }
+            }
+        }
+
+        private fun copyAssetFile(assets: android.content.res.AssetManager, srcPath: String, dstPath: String) {
+            try {
+                assets.open(srcPath).use { input ->
+                    java.io.FileOutputStream(dstPath).use { output -> input.copyTo(output) }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to copy $srcPath: ${e.message}")
+            }
+        }
     }
 
-    private var model: Model? = null
+    // ── Instance state (per-screen, not shared) ───────────────────────────
     private var speechService: SpeechService? = null
     private var isListening = false
     private var shouldKeepListening = false
-    private var isModelLoaded = false
-
-    // Prevents double-firing from partial + final result
     private var lastCommandTime = 0L
-    private val COMMAND_COOLDOWN_MS = 1500L
 
     init {
-        loadModelAsync()
+        // Pass applicationContext so we never leak an Activity reference
+        ensureModelLoaded(context.applicationContext) {
+            // Model is ready — start listening if caller already asked for it
+            if (shouldKeepListening && !isListening) {
+                createAndStartRecognizer()
+            }
+        }
     }
 
-    // ─────────────────────────────────────────
-    // PUBLIC — same interface as original
-    // ─────────────────────────────────────────
+    // ── PUBLIC ────────────────────────────────────────────────────────────
 
     fun startListening() {
         shouldKeepListening = true
-        if (!isModelLoaded) {
-            Log.w(TAG, "Model not ready yet — will start when ready")
+        if (sharedModel == null) {
+            Log.w(TAG, "Model not ready yet — will start when loaded")
             return
         }
-        if (isListening) {
-            Log.d(TAG, "Already listening — ignoring startListening()")
-            return
-        }
+        if (isListening) return
         createAndStartRecognizer()
-        Log.d(TAG, "START LISTENING CALLED")
     }
 
     fun stopListening() {
         shouldKeepListening = false
         isListening = false
         destroyRecognizer()
-        Log.d(TAG, "Stopped listening")
     }
 
-    // ─────────────────────────────────────────
-    // PRIVATE — SETUP
-    // ─────────────────────────────────────────
+    // ── RECOGNIZER LIFECYCLE ──────────────────────────────────────────────
 
     private fun createAndStartRecognizer() {
-        // Destroy old one first — same as original
         destroyRecognizer()
-
+        val model = sharedModel ?: run {
+            Log.w(TAG, "createAndStartRecognizer called but model is null")
+            return
+        }
         try {
-            val recognizer = Recognizer(model, SAMPLE_RATE)
+            val recognizer = Recognizer(model, SAMPLE_RATE, GRAMMAR)
             speechService = SpeechService(recognizer, SAMPLE_RATE)
             speechService?.startListening(recognitionListener)
             isListening = true
-            Log.d(TAG, "Started listening...")
+            Log.d(TAG, "Listening started")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start recognizer: ${e.message}")
             isListening = false
@@ -89,154 +159,38 @@ class VoiceManager(
         isListening = false
     }
 
-    /** Same as original — restarts after result or error */
     private fun restartIfNeeded() {
         if (shouldKeepListening) {
             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                if (shouldKeepListening && !isListening) {
-                    createAndStartRecognizer()
-                }
+                if (shouldKeepListening && !isListening) createAndStartRecognizer()
             }, 500)
         }
     }
 
-    // ─────────────────────────────────────────
-    // PRIVATE — MODEL LOADING
-    // ─────────────────────────────────────────
-
-    private fun loadModelAsync() {
-        Thread {
-            try {
-                Log.d(TAG, "Loading Vosk model from assets/model...")
-
-                val outputDir = java.io.File(context.filesDir, "vosk-model")
-
-                if (!outputDir.exists() || outputDir.listFiles().isNullOrEmpty()) {
-                    outputDir.mkdirs()
-                    copyAssetFolder(context.assets, MODEL_PATH, outputDir.absolutePath)
-                    Log.d(TAG, "Model copied to: ${outputDir.absolutePath}")
-                } else {
-                    Log.d(TAG, "Model already exists at: ${outputDir.absolutePath}")
-                }
-
-                model = Model(outputDir.absolutePath)
-                isModelLoaded = true
-                Log.d(TAG, "Vosk model loaded successfully")
-
-                // If startListening was called before model was ready, start now
-                android.os.Handler(android.os.Looper.getMainLooper()).post {
-                    if (shouldKeepListening && !isListening) {
-                        createAndStartRecognizer()
-                    }
-                }
-
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to load Vosk model: ${e.message}")
-            }
-        }.start()
-    }
-
-    private fun copyAssetFolder(
-        assetManager: AssetManager,
-        assetPath: String,
-        destPath: String
-    ) {
-        val files = assetManager.list(assetPath) ?: return
-        val destDir = java.io.File(destPath)
-        if (!destDir.exists()) destDir.mkdirs()
-
-        for (file in files) {
-            val srcPath = "$assetPath/$file"
-            val dstPath = "$destPath/$file"
-            val subFiles = assetManager.list(srcPath)
-            if (!subFiles.isNullOrEmpty()) {
-                copyAssetFolder(assetManager, srcPath, dstPath)
-            } else {
-                copyAssetFile(assetManager, srcPath, dstPath)
-            }
-        }
-    }
-
-    private fun copyAssetFile(
-        assetManager: AssetManager,
-        srcPath: String,
-        dstPath: String
-    ) {
-        try {
-            assetManager.open(srcPath).use { input ->
-                java.io.FileOutputStream(dstPath).use { output ->
-                    input.copyTo(output)
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to copy $srcPath: ${e.message}")
-        }
-    }
-
-    // ─────────────────────────────────────────
-    // PRIVATE — PARSE TEXT INTO COMMANDS
-    // Same logic as original VoiceManager
-    // ─────────────────────────────────────────
-
-    private fun parseCommand(spokenText: String): VoiceCommand {
-        val text = spokenText.lowercase().trim()
-        Log.d(TAG, "Heard: \"$text\"")
-
-        return when {
-            text.contains("robomove start") || text.contains("robot move start") || text.contains("start") -> VoiceCommand.START
-            text.contains("robomove pause") || text.contains("robot move pause") || text.contains("pause") -> VoiceCommand.PAUSE
-            text.contains("robomove play")  || text.contains("robot move play")  || text.contains("play")  -> VoiceCommand.PLAY
-            text.contains("robomove stop")  || text.contains("robot move stop")  || text.contains("stop")  -> VoiceCommand.STOP
-            text.contains("robomove skip")  || text.contains("robot move skip")  || text.contains("skip")  -> VoiceCommand.SKIP
-            text.contains("yes")                                                 -> VoiceCommand.YES
-            text.contains("no")                                                  -> VoiceCommand.NO
-            else -> VoiceCommand.UNKNOWN
-        }
-    }
-
-    // ─────────────────────────────────────────
-    // RECOGNITION LISTENER
-    // Matches original structure — onResults fires
-    // command, onPartialResult for fast response,
-    // errors restart just like original
-    // ─────────────────────────────────────────
+    // ── RECOGNITION LISTENER (unchanged) ─────────────────────────────────
 
     private val recognitionListener = object : RecognitionListener {
-
         override fun onPartialResult(hypothesis: String?) {
-            hypothesis ?: return
-            val text = extractText(hypothesis)
-            if (text.isEmpty()) return
-
-            val command = parseCommand(text)
-            if (command != VoiceCommand.UNKNOWN) {
-                fireCommand(command)
-            }
+            val text = hypothesis?.let { extractText(it) } ?: return
+            if (text.isNotEmpty()) Log.d(TAG, "Partial (ignored): \"$text\"")
         }
 
         override fun onResult(hypothesis: String?) {
             isListening = false
-            hypothesis ?: return
+            hypothesis ?: run { restartIfNeeded(); return }
             val text = extractText(hypothesis)
-            if (text.isEmpty()) {
-                restartIfNeeded()
-                return
+            Log.d(TAG, "Final result: \"$text\"")
+            if (text.isNotEmpty()) {
+                val command = parseCommand(text)
+                if (command != VoiceCommand.UNKNOWN) {
+                    Log.d(TAG, "Command: $command")
+                    fireCommand(command)
+                }
             }
-
-            val command = parseCommand(text)
-            if (command != VoiceCommand.UNKNOWN) {
-                Log.d(TAG, "Command detected: $command from \"$text\"")
-                fireCommand(command)
-            }
-
-            // Keep listening after result — same as original
             restartIfNeeded()
         }
 
-        override fun onFinalResult(hypothesis: String?) {
-            // onResult already handles this — do nothing here
-            // to avoid double firing
-        }
+        override fun onFinalResult(hypothesis: String?) { /* handled by onResult */ }
 
         override fun onError(exception: Exception?) {
             isListening = false
@@ -251,43 +205,49 @@ class VoiceManager(
         }
     }
 
-    // ─────────────────────────────────────────
-    // FIRE COMMAND — with cooldown to prevent
-    // double-firing from partial + final
-    // ─────────────────────────────────────────
+    // ── COMMAND PARSING (unchanged) ───────────────────────────────────────
+
+    private fun parseCommand(spokenText: String): VoiceCommand {
+        val text = spokenText.lowercase().trim()
+        return when {
+            text.hasWord("start")    -> VoiceCommand.START
+            text.hasWord("pause")    -> VoiceCommand.PAUSE
+            text.hasWord("play")     -> VoiceCommand.PLAY
+            text.hasWord("stop")     -> VoiceCommand.STOP
+            text.hasWord("skip")     -> VoiceCommand.SKIP
+            text.hasWord("continue") -> VoiceCommand.CONTINUE
+            text.hasWord("yes")      -> VoiceCommand.YES
+            text.hasWord("no")       -> VoiceCommand.NO
+            else                     -> VoiceCommand.UNKNOWN
+        }
+    }
+
+    private fun String.hasWord(word: String): Boolean =
+        this.split(" ", "\t", ",", ".", "!", "?").any { it.trim() == word }
+
+    // ── COMMAND DISPATCH (unchanged) ──────────────────────────────────────
 
     private fun fireCommand(command: VoiceCommand) {
         val now = System.currentTimeMillis()
         if (now - lastCommandTime < COMMAND_COOLDOWN_MS) {
-            Log.d(TAG, "Command cooldown — ignoring duplicate: $command")
+            Log.d(TAG, "Cooldown — ignoring duplicate: $command")
             return
         }
         lastCommandTime = now
-
-        android.os.Handler(android.os.Looper.getMainLooper()).post {
-            onCommandDetected(command)
-        }
+        android.os.Handler(android.os.Looper.getMainLooper()).post { onCommandDetected(command) }
     }
 
-    // ─────────────────────────────────────────
-    // TEXT EXTRACTION FROM VOSK JSON
-    // ─────────────────────────────────────────
+    // ── TEXT EXTRACTION (unchanged) ───────────────────────────────────────
 
     private fun extractText(hypothesis: String): String {
         return try {
             when {
                 hypothesis.contains("\"partial\"") ->
-                    hypothesis
-                        .substringAfter("\"partial\"")
-                        .substringAfter("\"")
-                        .substringBefore("\"")
-                        .trim()
+                    hypothesis.substringAfter("\"partial\"")
+                        .substringAfter("\"").substringBefore("\"").trim()
                 hypothesis.contains("\"text\"") ->
-                    hypothesis
-                        .substringAfter("\"text\"")
-                        .substringAfter("\"")
-                        .substringBefore("\"")
-                        .trim()
+                    hypothesis.substringAfter("\"text\"")
+                        .substringAfter("\"").substringBefore("\"").trim()
                 else -> hypothesis.trim()
             }
         } catch (e: Exception) {

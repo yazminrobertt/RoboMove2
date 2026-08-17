@@ -4,11 +4,10 @@ package com.robomove.app.model
  * One exercise in the game.
  *
  * @param type          Which exercise this is
- * @param displayName   Shown on screen e.g. "Raise Left Hand"
- * @param instruction   Shown as subtitle e.g. "Lift your left arm above your head"
- * @param targetReps    How many reps needed (always 5 for now)
- * @param videoFileName Name of video file in res/raw e.g. "raise_left_hand"
- *                      (we'll add videos later — leave as empty string for now)
+ * @param displayName   contoh "Raise Left Hand"
+ * @param instruction   coth "Lift your left arm above your head"
+ * @param targetReps    5 all
+ * @param videoFileName name of video for each exercise
  */
 data class Exercise(
     val type: ExerciseType,

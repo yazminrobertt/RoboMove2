@@ -10,9 +10,9 @@ import android.widget.ImageButton
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.robomove.app.R
-import com.robomove.app.ui.countdown.CountdownActivity
 import com.robomove.app.voice.VoiceCommand
 import com.robomove.app.voice.VoiceManager
+import com.robomove.app.ui.alignment.CameraAlignmentActivity
 
 class InstructionsActivity : AppCompatActivity() {
 
@@ -68,9 +68,9 @@ class InstructionsActivity : AppCompatActivity() {
 
     private fun goToCountdown() {
         voiceManager.stopListening()
-        val intent = Intent(this, CountdownActivity::class.java)
+        val intent = Intent(this, CameraAlignmentActivity::class.java)
         startActivity(intent)
-        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
+        finish()
     }
 
     // Stop listening when leaving this screen

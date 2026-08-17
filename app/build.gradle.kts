@@ -12,6 +12,7 @@ android {
 
     buildFeatures {
         viewBinding = true
+        aidl = true
     }
 
     defaultConfig {
@@ -44,6 +45,7 @@ android {
             useLegacyPackaging = true
         }
     }
+
 }
 
 dependencies {

@@ -2,37 +2,21 @@ package com.robomove.app.voice
 
 import android.content.Context
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import com.robomove.app.model.ExerciseType
 import com.robomove.app.model.RepQuality
 import java.util.Locale
 
-/**
- * FeedbackManager — calmer version for children.
- *
- * Rules:
- *  1. Exercise instruction is always spoken fully first.
- *     No rep feedback fires until INSTRUCTION_LOCKOUT_MS has passed.
- *  2. Encouragement is only spoken occasionally (every N correct reps).
- *  3. Correction feedback has a longer cooldown — not every frame.
- *  4. No mid-movement spam — corrections only fire after a rep attempt.
- */
 class FeedbackManager(context: Context) {
 
     companion object {
         private const val TAG = "FeedbackManager"
-
-        // After speaking an instruction, wait this long before any rep feedback
-        private const val INSTRUCTION_LOCKOUT_MS = 4000L
-
-        // Minimum gap between correction messages
-        private const val CORRECTION_COOLDOWN_MS = 5000L
-
-        // Minimum gap between encouragement messages
-        private const val ENCOURAGEMENT_COOLDOWN_MS = 3000L
-
-        // Only cheer every N correct reps (not every single one)
+        private const val INSTRUCTION_UTTERANCE_ID = "robomove_instruction"
         private const val CHEER_EVERY_N_REPS = 2
+        private const val CORRECTION_COOLDOWN_MS = 4000L       // was 5000L
+        private const val ENCOURAGEMENT_COOLDOWN_MS = 2000L    // was 3000L
+        private const val POST_INSTRUCTION_GRACE_MS = 2000L    //
     }
 
     private var tts: TextToSpeech? = null
@@ -40,19 +24,43 @@ class FeedbackManager(context: Context) {
     private var onReadyCallback: (() -> Unit)? = null
     private var lastCorrectionTime    = 0L
     private var lastEncouragementTime = 0L
-    private var instructionSpokenAt   = 0L   // timestamp of last instruction
-    private var correctRepCount       = 0    // counts up, resets each exercise
+    private var instructionDoneAt     = 0L
+    private var correctRepCount       = 0
 
     init {
-        tts = TextToSpeech(context) { status ->
+        tts = TextToSpeech(context.applicationContext) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 val result = tts?.setLanguage(Locale.US)
                 isReady = result != TextToSpeech.LANG_MISSING_DATA
                         && result != TextToSpeech.LANG_NOT_SUPPORTED
-                tts?.setSpeechRate(0.85f)
-                tts?.setPitch(1.1f)
+                tts?.setSpeechRate(0.95f)
+                tts?.setPitch(1.05f)
+
+                tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                    override fun onStart(utteranceId: String?) {}
+
+                    override fun onDone(utteranceId: String?) {
+                        if (utteranceId == INSTRUCTION_UTTERANCE_ID) {
+                            instructionDoneAt = System.currentTimeMillis()
+                            Log.d(TAG, "Instruction done — grace period started")
+                        }
+                    }
+
+                    @Deprecated("Required override for API < 21")
+                    override fun onError(utteranceId: String?) {
+                        if (utteranceId == INSTRUCTION_UTTERANCE_ID) {
+                            instructionDoneAt = System.currentTimeMillis()
+                        }
+                    }
+
+                    override fun onError(utteranceId: String?, errorCode: Int) {
+                        if (utteranceId == INSTRUCTION_UTTERANCE_ID) {
+                            instructionDoneAt = System.currentTimeMillis()
+                        }
+                    }
+                })
+
                 Log.d(TAG, "TTS ready: $isReady")
-                // Notify caller that TTS is ready
                 onReadyCallback?.invoke()
             } else {
                 Log.e(TAG, "TTS init failed: $status")
@@ -64,56 +72,37 @@ class FeedbackManager(context: Context) {
     // PUBLIC API
     // ─────────────────────────────────────────
 
-    /**
-     * Set a callback that fires once TTS is fully initialized.
-     * Use this to delay the first exercise instruction until TTS is ready.
-     * If TTS is already ready when this is called, fires immediately.
-     */
     fun setOnReadyCallback(callback: () -> Unit) {
-        if (isReady) {
-            // Already ready — fire immediately
-            callback()
-        } else {
-            onReadyCallback = callback
-        }
+        if (isReady) callback() else onReadyCallback = callback
     }
 
-    /**
-     * Speak the exercise name + instruction.
-     * Locks out rep feedback for INSTRUCTION_LOCKOUT_MS afterwards.
-     * Call this when a new exercise loads.
-     */
     fun speakExerciseName(name: String, instruction: String) {
         correctRepCount = 0
-        instructionSpokenAt = System.currentTimeMillis()
-        speakImmediate("$name. $instruction")
-        Log.d(TAG, "Instruction spoken for: $name")
+        instructionDoneAt = 0L  // lock until utterance completes
+
+        tts?.speak(
+            "$name. $instruction",
+            TextToSpeech.QUEUE_FLUSH,
+            null,
+            INSTRUCTION_UTTERANCE_ID
+        )
+        Log.d(TAG, "Instruction queued for: $name")
     }
 
-    /**
-     * Called after a rep completes.
-     * Only speaks if lockout has passed.
-     */
     fun speakRepFeedback(quality: RepQuality, exerciseType: ExerciseType) {
-        if (isInInstructionLockout()) {
-            Log.d(TAG, "Rep feedback suppressed — instruction lockout active")
+        if (isInstructionBlocking()) {
+            Log.d(TAG, "Rep feedback suppressed — grace period active")
             return
         }
-
         when (quality) {
             RepQuality.CORRECT,
             RepQuality.SLIGHTLY_WRONG -> maybeCheer()
-
-            RepQuality.WRONG -> maybeCorrect(exerciseType)
+            RepQuality.WRONG          -> maybeCorrect(exerciseType)
         }
     }
 
-    /**
-     * Called mid-movement when pose looks wrong.
-     * Uses its own cooldown — less frequent than rep feedback.
-     */
     fun speakCorrection(exerciseType: ExerciseType) {
-        if (isInInstructionLockout()) return
+        if (isInstructionBlocking()) return
         maybeCorrect(exerciseType)
     }
 
@@ -149,68 +138,46 @@ class FeedbackManager(context: Context) {
         speakImmediate(message)
     }
 
-    /**
-     * Stops any currently speaking audio immediately.
-     * Does NOT destroy the TTS engine — speaking can resume afterwards.
-     * Call this when pausing the game.
-     */
     fun stopSpeaking() {
         tts?.stop()
-        // Reset the instruction lockout so feedback doesn't stay blocked after resume
-        instructionSpokenAt = 0L
-        Log.d(TAG, "TTS speaking stopped")
+        // Unlock immediately — don't leave feedback blocked while paused
+        instructionDoneAt = System.currentTimeMillis() - POST_INSTRUCTION_GRACE_MS
+        Log.d(TAG, "TTS stopped")
     }
 
     fun shutdown() {
         tts?.stop()
         tts?.shutdown()
         tts = null
-        Log.d(TAG, "TTS shut down")
     }
 
     // ─────────────────────────────────────────
     // PRIVATE — LOGIC
     // ─────────────────────────────────────────
 
-    private fun isInInstructionLockout(): Boolean {
-        val elapsed = System.currentTimeMillis() - instructionSpokenAt
-        return elapsed < INSTRUCTION_LOCKOUT_MS
+    private fun isInstructionBlocking(): Boolean {
+        if (instructionDoneAt == 0L) return true  // instruction not finished yet
+        return System.currentTimeMillis() - instructionDoneAt < POST_INSTRUCTION_GRACE_MS
     }
 
     private fun maybeCheer() {
         correctRepCount++
-
-        // Only cheer every N reps, not every single rep
-        if (correctRepCount % CHEER_EVERY_N_REPS != 0) {
-            Log.d(TAG, "Cheer skipped — rep $correctRepCount (cheering every $CHEER_EVERY_N_REPS)")
-            return
-        }
-
+        if (correctRepCount % CHEER_EVERY_N_REPS != 0) return
         val now = System.currentTimeMillis()
-        if (now - lastEncouragementTime < ENCOURAGEMENT_COOLDOWN_MS) {
-            Log.d(TAG, "Cheer suppressed — cooldown")
-            return
-        }
-
+        if (now - lastEncouragementTime < ENCOURAGEMENT_COOLDOWN_MS) return
         lastEncouragementTime = now
         speakImmediate(getEncouragement())
     }
 
     private fun maybeCorrect(exerciseType: ExerciseType) {
         val now = System.currentTimeMillis()
-        if (now - lastCorrectionTime < CORRECTION_COOLDOWN_MS) {
-            Log.d(TAG, "Correction suppressed — cooldown")
-            return
-        }
+        if (now - lastCorrectionTime < CORRECTION_COOLDOWN_MS) return
         lastCorrectionTime = now
         speakImmediate(getCorrection(exerciseType))
     }
 
     private fun speakImmediate(text: String) {
-        if (!isReady) {
-            Log.w(TAG, "TTS not ready, skipping: $text")
-            return
-        }
+        if (!isReady) { Log.w(TAG, "TTS not ready: $text"); return }
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "robomove_tts")
         Log.d(TAG, "TTS: \"$text\"")
     }
@@ -219,29 +186,85 @@ class FeedbackManager(context: Context) {
     // MESSAGE BANKS
     // ─────────────────────────────────────────
 
-    private fun getEncouragement(): String {
-        return listOf(
-            "Good job!", "Keep it up!", "Awesome!", "Well done!",
-            "You're doing great!", "Fantastic!", "Keep going!"
-        ).random()
-    }
+    private fun getEncouragement() = listOf(
+        "Good job!", "Keep it up!", "Awesome!", "Well done!",
+        "You're doing great!", "Fantastic!", "Keep going!"
+    ).random()
+
+    private val correctionBanks: Map<ExerciseType, List<String>> = mapOf(
+        ExerciseType.RAISE_LEFT_HAND    to listOf(
+            "Raise your left arm up!",
+            "Left arm out and up!",
+            "Lift your left arm higher!"
+        ),
+        ExerciseType.RAISE_RIGHT_HAND   to listOf(
+            "Raise your right arm up!",
+            "Right arm out and up!",
+            "Lift your right arm higher!"
+        ),
+        ExerciseType.BOTH_HANDS_UP      to listOf(
+            "Raise both arms above your head!",
+            "Both arms up high!",
+            "Stretch both arms up!"
+        ),
+        ExerciseType.TOUCH_SHOULDERS    to listOf(
+            "Bring your hands to your shoulders.",
+            "Touch your shoulders with both hands.",
+            "Hands to shoulders!"
+        ),
+        ExerciseType.ARM_CIRCLES        to listOf(
+            "Stretch your arms out and make big circles.",
+            "Arms wide and keep circling!",
+            "Big arm circles, keep going!"
+        ),
+        ExerciseType.SIDE_STRETCH_LEFT  to listOf(
+            "Lean your body gently to the right.",
+            "Stretch over to the right side.",
+            "Reach up and over to the right!"
+        ),
+        ExerciseType.SIDE_STRETCH_RIGHT to listOf(
+            "Lean your body gently to the left.",
+            "Stretch over to the left side.",
+            "Reach up and over to the left!"
+        ),
+        ExerciseType.KNEE_LIFT_LEFT     to listOf(
+            "Lift your left knee up!",
+            "Left knee up high!",
+            "Bring that left knee up!"
+        ),
+        ExerciseType.KNEE_LIFT_RIGHT    to listOf(
+            "Lift your right knee up!",
+            "Right knee up high!",
+            "Bring that right knee up!"
+        ),
+        ExerciseType.CROSS_BODY_LEFT    to listOf(
+            "Reach your right hand to your left knee.",
+            "Right hand across to your left knee!",
+            "Cross your right arm over to the left!"
+        ),
+        ExerciseType.CROSS_BODY_RIGHT   to listOf(
+            "Reach your left hand to your right knee.",
+            "Left hand across to your right knee!",
+            "Cross your left arm over to the right!"
+        ),
+        ExerciseType.JUMPING_JACK       to listOf(
+            "Jump and spread your arms and legs wide!",
+            "Arms and legs out, jump!",
+            "Big jump — spread out wide!"
+        ),
+        ExerciseType.SQUAT              to listOf(
+            "Bend your knees and lower yourself down.",
+            "Squat down nice and low!",
+            "Knees bent, go lower!"
+        ),
+        ExerciseType.CLAP_ABOVE_HEAD    to listOf(
+            "Raise both hands and clap above your head!",
+            "Hands up and clap!",
+            "Clap your hands up high!"
+        )
+    )
 
     private fun getCorrection(type: ExerciseType): String {
-        return when (type) {
-            ExerciseType.RAISE_LEFT_HAND    -> "Raise your left arm out to the side and up."
-            ExerciseType.RAISE_RIGHT_HAND   -> "Raise your right arm out to the side and up."
-            ExerciseType.BOTH_HANDS_UP      -> "Raise both arms above your head."
-            ExerciseType.TOUCH_SHOULDERS    -> "Bring your hands to your shoulders."
-            ExerciseType.ARM_CIRCLES        -> "Stretch your arms out and make big circles."
-            ExerciseType.SIDE_STRETCH_LEFT  -> "Lean your body gently to the right."
-            ExerciseType.SIDE_STRETCH_RIGHT -> "Lean your body gently to the left."
-            ExerciseType.KNEE_LIFT_LEFT     -> "Lift your left knee up."
-            ExerciseType.KNEE_LIFT_RIGHT    -> "Lift your right knee up."
-            ExerciseType.CROSS_BODY_LEFT    -> "Reach your right hand to your left knee."
-            ExerciseType.CROSS_BODY_RIGHT   -> "Reach your left hand to your right knee."
-            ExerciseType.JUMPING_JACK       -> "Jump and spread your arms and legs wide."
-            ExerciseType.SQUAT             -> "Bend your knees and lower yourself down."
-            ExerciseType.CLAP_ABOVE_HEAD   -> "Raise both hands and clap above your head."
-        }
+        return correctionBanks[type]?.random() ?: "Keep going!"
     }
 }

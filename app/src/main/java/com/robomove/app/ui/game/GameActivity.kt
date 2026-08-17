@@ -57,6 +57,9 @@ class GameActivity : AppCompatActivity() {
     private var lastImageWidth  = 1
     private var lastImageHeight = 1
 
+    private var isReturningFromPause = false
+
+
     private val currentLevel    get() = allLevels[levelIndex]
     private val currentExercise get() = currentLevel.exercises[exerciseIndex]
     private val targetReps      get() = currentExercise.targetReps
@@ -205,10 +208,16 @@ class GameActivity : AppCompatActivity() {
     // ─────────────────────────────────────────
 
     private fun playDemoVideo(videoName: String) {
-        stopDemoVideo()
+        // Fully release old player first
+        mediaPlayer?.stop()
+        mediaPlayer?.release()
+        mediaPlayer = null
 
         tvDemoPlaceholder.visibility = View.GONE
         videoDemo.visibility         = View.VISIBLE
+
+        // Force surface reset by detaching and reattaching the listener
+        videoDemo.surfaceTextureListener = null
 
         if (videoDemo.isAvailable) {
             startMediaPlayer(videoDemo.surfaceTexture!!, videoName)
@@ -278,15 +287,23 @@ class GameActivity : AppCompatActivity() {
 
     private fun setupCamera() {
         poseDetector = PoseDetector(this) { pose, imageWidth, imageHeight ->
+            // Rep counting runs on camera thread — fast, no UI work
             if (isPlaying) {
                 lastImageWidth  = imageWidth
                 lastImageHeight = imageHeight
                 repCounter.setImageDimensions(imageWidth, imageHeight, isFrontCamera)
-                poseOverlayView.updatePose(pose, imageWidth, imageHeight, isFrontCamera)
                 val status = repCounter.processLandmarks(pose)
                 Log.v(TAG, "Pose: $status")
-            } else {
-                poseOverlayView.clearPose()
+            }
+
+            // Overlay update posted to main thread separately
+            // so it doesn't block the next frame from being processed
+            runOnUiThread {
+                if (isPlaying) {
+                    poseOverlayView.updatePose(pose, imageWidth, imageHeight, isFrontCamera)
+                } else {
+                    poseOverlayView.clearPose()
+                }
             }
         }
 
@@ -300,6 +317,7 @@ class GameActivity : AppCompatActivity() {
             }
 
             val imageAnalyzer = ImageAnalysis.Builder()
+                .setTargetResolution(android.util.Size(640, 480))
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
                 .build()
@@ -430,9 +448,10 @@ class GameActivity : AppCompatActivity() {
 
     private fun pauseGame() {
         isPlaying = false
+        isReturningFromPause = true   // ← add this line
         voiceManager.stopListening()
-        feedbackManager.stopSpeaking()   // ← stop TTS immediately
-        mediaPlayer?.pause()             // ← also pause the demo video
+        feedbackManager.stopSpeaking()
+        mediaPlayer?.pause()
         Log.d(TAG, "Game paused")
 
         val intent = Intent(this, PauseActivity::class.java).apply {
@@ -511,12 +530,21 @@ class GameActivity : AppCompatActivity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == REQUEST_PAUSE && resultCode == RESULT_OK) {
             when (data?.getStringExtra("action")) {
+
                 PauseActivity.ACTION_RESUME -> {
                     isPlaying = true
                     voiceManager.startListening()
-                    mediaPlayer?.start()
+                    val videoName = currentExercise.videoFileName
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                        if (videoName.isNotEmpty()) {
+                            playDemoVideo(videoName)
+                        } else {
+                            stopDemoVideo()
+                        }
+                    }, 300)
                     Log.d(TAG, "Game resumed")
                 }
+
                 PauseActivity.ACTION_RESTART_LEVEL -> {
                     exerciseIndex = 0
                     currentReps   = 0
@@ -524,9 +552,9 @@ class GameActivity : AppCompatActivity() {
                     // Roll score back to what it was at the start of this level
                     scoreManager.restoreScore(scoreAtLevelStart)
                     tvScore.text = scoreManager.totalScore.toString()
-                    Log.d(TAG, "Level restarted — score rolled back to $scoreAtLevelStart")
                     voiceManager.startListening()
                     stopDemoVideo()
+                    Log.d(TAG, "Level restarted — score rolled back to $scoreAtLevelStart")
                     android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                         loadCurrentExercise()
                     }, 300)
@@ -535,19 +563,26 @@ class GameActivity : AppCompatActivity() {
         }
     }
 
+
     // ─────────────────────────────────────────
     // LIFECYCLE
     // ─────────────────────────────────────────
 
     override fun onPause() {
         super.onPause()
-        isPlaying = false
+        // Don't set isPlaying = false here — onActivityResult handles state
+        // when returning from PauseActivity. Only pause the video.
         voiceManager.stopListening()
         mediaPlayer?.pause()
     }
 
     override fun onResume() {
         super.onResume()
+        if (isReturningFromPause) {
+            // onActivityResult will handle everything — don't touch mediaPlayer here
+            isReturningFromPause = false
+            return
+        }
         isPlaying = true
         voiceManager.startListening()
         mediaPlayer?.start()

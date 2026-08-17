@@ -15,7 +15,7 @@ data class GameSession(
     fun addScore(quality: RepQuality) {
         totalScore += when (quality) {
             RepQuality.CORRECT        -> 10
-            RepQuality.SLIGHTLY_WRONG -> 5
+            RepQuality.SLIGHTLY_WRONG -> 10
             RepQuality.WRONG          -> 0
         }
     }
