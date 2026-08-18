@@ -11,6 +11,7 @@ import android.service.reeman.IReemanService
  * came from. Arm frames use the identical AA 55 [len] [payload] [xor] envelope
  * as DamanHeadControl, sent through the same reeman system service.
  */
+
 class DamanArmControl(private val context: Context) {
 
     companion object {
@@ -38,8 +39,8 @@ class DamanArmControl(private val context: Context) {
     private val TIME_VALUE: Byte = 0x00   // 0 = sync with next queued action
 
     // ── Joint limits (per vendor demo's on-screen hint text) ────────────────
-    val JOINT1_MIN = 0;    val JOINT1_MAX = 180   // shoulder pitch — likely the "raise" joint
-    val JOINT2_MIN = 0;    val JOINT2_MAX = 80    // shoulder lift out to side
+    val JOINT1_MIN = 0;    val JOINT1_MAX = 180   // shoulder pitch — forward/up swing
+    val JOINT2_MIN = 0;    val JOINT2_MAX = 80    // shoulder lift out to side — "openness"
     val JOINT3_MIN = -80;  val JOINT3_MAX = 80    // upper-arm rotation/twist
     val JOINT4_MIN = -50;  val JOINT4_MAX = 80    // elbow
 
@@ -82,21 +83,43 @@ class DamanArmControl(private val context: Context) {
     fun moveLeftArm(joint1: Int, joint2: Int, joint3: Int, joint4: Int, speed: Int, mode: Int = MODE_ABSOLUTE): Int =
         sendArmCommand(CMD_LEFT_ARM, joint1, joint2, joint3, joint4, speed, mode)
 
-    /**
-     * Both arms up. ⚠️ j1/j2 values below are PLACEHOLDERS based on the range
-     * hints only — you must tune these on the real Daman (see Step 3).
-     */
+    // ── Gesture: both arms raised straight up ──────────────────────────────
     fun raiseBothArms(speed: Int = 60): Pair<Int, Int> {
         val right = moveRightArm(joint1 = 160, joint2 = 20, joint3 = 0, joint4 = 0, speed = speed)
         val left  = moveLeftArm(joint1 = 160, joint2 = 20, joint3 = 0, joint4 = 0, speed = speed)
         return Pair(right, left)
     }
 
+    // ── Gesture: both arms open wide to the sides (less forward, more "open") ──
+    // joint1 lower than raiseBothArms (less forward swing), joint2 near max
+    // (more sideways lift) — gives a "ta-da / open arms" pose instead of straight up.
+    fun openBothArmsWide(speed: Int = 60): Pair<Int, Int> {
+        val right = moveRightArm(joint1 = 90, joint2 = 80, joint3 = 0, joint4 = 0, speed = speed)
+        val left  = moveLeftArm(joint1 = 90, joint2 = 80, joint3 = 0, joint4 = 0, speed = speed)
+        return Pair(right, left)
+    }
+
+    // ── Gesture: single-arm raise (used for alternating left/right wave) ───
+    fun raiseRightArm(speed: Int = 60): Int =
+        moveRightArm(joint1 = 160, joint2 = 20, joint3 = 0, joint4 = 0, speed = speed)
+
+    fun raiseLeftArm(speed: Int = 60): Int =
+        moveLeftArm(joint1 = 160, joint2 = 20, joint3 = 0, joint4 = 0, speed = speed)
+
+    // ── Return to neutral rest pose ─────────────────────────────────────────
+    // Same neutral (0,0,0,0) works for lowering after any gesture above,
+    // since they all start from and return to the same rest position.
     fun lowerBothArms(speed: Int = 60): Pair<Int, Int> {
         val right = moveRightArm(joint1 = 0, joint2 = 0, joint3 = 0, joint4 = 0, speed = speed)
         val left  = moveLeftArm(joint1 = 0, joint2 = 0, joint3 = 0, joint4 = 0, speed = speed)
         return Pair(right, left)
     }
+
+    fun lowerRightArm(speed: Int = 60): Int =
+        moveRightArm(joint1 = 0, joint2 = 0, joint3 = 0, joint4 = 0, speed = speed)
+
+    fun lowerLeftArm(speed: Int = 60): Int =
+        moveLeftArm(joint1 = 0, joint2 = 0, joint3 = 0, joint4 = 0, speed = speed)
 
     // ── Internal protocol builder ───────────────────────────────────────────
 

@@ -81,6 +81,8 @@ class GameActivity : AppCompatActivity() {
     // ── Robot ──
     private lateinit var armControl : DamanArmControl
     private val armHandler = Handler(Looper.getMainLooper())
+    private var armBusy = false               // idea 1: prevents overlapping gestures
+    private var cheerGestureIndex = 0          // idea 2: cycles through the 3 gestures below
 
     // ── Views ──
     private lateinit var tvScore           : TextView
@@ -162,19 +164,14 @@ class GameActivity : AppCompatActivity() {
         // ───────────────────────────────────────────────────────────────
         // IMPORTANT: keep DRY_RUN = true until you've checked Logcat
         // (tag "DamanArmControl") and confirmed the joint values in
-        // raiseBothArms()/lowerBothArms() actually match a safe "arms up"
-        // pose on the real Daman. Flip to false only after that.
+        // raiseBothArms()/openBothArmsWide()/raiseRightArm()/raiseLeftArm()
+        // are safe on the real Daman. Flip to false only after that.
         DamanArmControl.DRY_RUN = false
         // ───────────────────────────────────────────────────────────────
 
         // Fire the arm gesture in sync with FeedbackManager's own
         // every-2-correct-reps cheer — no separate counter needed here.
-        feedbackManager.onCheerTriggered = {
-            armControl.raiseBothArms(speed = 60)
-            armHandler.postDelayed({
-                armControl.lowerBothArms(speed = 60)
-            }, ARM_LOWER_DELAY_MS)
-        }
+        feedbackManager.onCheerTriggered = { performCheerGesture() }
 
         voiceManager = VoiceManager(this) { command ->
             runOnUiThread { handleVoiceCommand(command) }
@@ -190,6 +187,63 @@ class GameActivity : AppCompatActivity() {
                 feedbackManager.speakExerciseName(exercise.displayName, exercise.instruction)
             }
         }
+    }
+
+    // ─────────────────────────────────────────
+    // ROBOT ARM GESTURES
+    // ─────────────────────────────────────────
+
+    /**
+     * Cycles through 3 gestures every time it's called, so the robot doesn't
+     * do the exact same motion every single cheer:
+     *   0 → both arms straight up
+     *   1 → both arms open wide (more sideways, less forward)
+     *   2 → single-arm wave, alternating right then left each time this comes up
+     *
+     * armBusy guards against a second gesture firing before the first one has
+     * finished lowering (e.g. two cheers close together).
+     */
+    private fun performCheerGesture() {
+        if (armBusy || !armControl.isReady()) {
+            Log.d(TAG, "Skipping arm gesture — busy=$armBusy ready=${armControl.isReady()}")
+            return
+        }
+        armBusy = true
+
+        when (cheerGestureIndex % 3) {
+            0 -> {
+                armControl.raiseBothArms(speed = 90)
+                armHandler.postDelayed({
+                    armControl.lowerBothArms(speed = 90)
+                    armBusy = false
+                }, ARM_LOWER_DELAY_MS)
+            }
+            1 -> {
+                armControl.openBothArmsWide(speed = 90)
+                armHandler.postDelayed({
+                    armControl.lowerBothArms(speed = 90)
+                    armBusy = false
+                }, ARM_LOWER_DELAY_MS)
+            }
+            2 -> {
+                val useRightArm = (cheerGestureIndex / 3) % 2 == 0
+                if (useRightArm) {
+                    armControl.raiseRightArm(speed = 90)
+                } else {
+                    armControl.raiseLeftArm(speed = 90)
+                }
+                armHandler.postDelayed({
+                    if (useRightArm) {
+                        armControl.lowerRightArm(speed = 90)
+                    } else {
+                        armControl.lowerLeftArm(speed = 90)
+                    }
+                    armBusy = false
+                }, ARM_LOWER_DELAY_MS)
+            }
+        }
+
+        cheerGestureIndex++
     }
 
     private fun loadCurrentExercise() {

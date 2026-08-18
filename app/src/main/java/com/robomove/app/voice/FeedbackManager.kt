@@ -27,7 +27,7 @@ class FeedbackManager(context: Context) {
     private var instructionDoneAt     = 0L
     private var correctRepCount       = 0
 
-    // ── NEW: fires every time maybeCheer() actually speaks an encouragement line.
+    // Fires every time maybeCheer() actually speaks an encouragement line.
     // GameActivity hooks this to trigger the robot arm gesture in sync with the
     // "Good job!" voice cheer, reusing the same every-2-correct-reps counter
     // instead of maintaining a second one.
@@ -95,11 +95,12 @@ class FeedbackManager(context: Context) {
         Log.d(TAG, "Instruction queued for: $name")
     }
 
+    // NOTE: no longer blocked at the top by isInstructionBlocking().
+    // Counting (maybeCheer / correctRepCount) must always happen so the
+    // "every 2 correct reps" cheer stays in sync with the reps the person
+    // is actually doing. The grace period now only blocks the SPEAKING
+    // (and arm gesture), inside maybeCheer()/maybeCorrect() themselves.
     fun speakRepFeedback(quality: RepQuality, exerciseType: ExerciseType) {
-        if (isInstructionBlocking()) {
-            Log.d(TAG, "Rep feedback suppressed — grace period active")
-            return
-        }
         when (quality) {
             RepQuality.CORRECT,
             RepQuality.SLIGHTLY_WRONG -> maybeCheer()
@@ -108,7 +109,6 @@ class FeedbackManager(context: Context) {
     }
 
     fun speakCorrection(exerciseType: ExerciseType) {
-        if (isInstructionBlocking()) return
         maybeCorrect(exerciseType)
     }
 
@@ -169,14 +169,19 @@ class FeedbackManager(context: Context) {
     private fun maybeCheer() {
         correctRepCount++
         if (correctRepCount % CHEER_EVERY_N_REPS != 0) return
+        if (isInstructionBlocking()) {
+            Log.d(TAG, "Cheer suppressed — grace period active (rep still counted)")
+            return
+        }
         val now = System.currentTimeMillis()
         if (now - lastEncouragementTime < ENCOURAGEMENT_COOLDOWN_MS) return
         lastEncouragementTime = now
         speakImmediate(getEncouragement())
-        onCheerTriggered?.invoke()   // ← NEW: robot arm gesture fires alongside the voice cheer
+        onCheerTriggered?.invoke()   // robot arm gesture fires alongside the voice cheer
     }
 
     private fun maybeCorrect(exerciseType: ExerciseType) {
+        if (isInstructionBlocking()) return
         val now = System.currentTimeMillis()
         if (now - lastCorrectionTime < CORRECTION_COOLDOWN_MS) return
         lastCorrectionTime = now
