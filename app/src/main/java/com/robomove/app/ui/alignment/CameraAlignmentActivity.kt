@@ -20,22 +20,39 @@ import com.robomove.app.robot.DamanHeadControl
 import com.robomove.app.ui.countdown.CountdownActivity
 import com.robomove.app.vision.AutoAlignmentController
 import com.robomove.app.vision.PoseDetector
+import com.robomove.app.voice.FeedbackManager
 import com.robomove.app.voice.VoiceManager
 import com.robomove.app.voice.VoiceCommand
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import kotlin.math.abs
+import kotlin.math.round
 
 @androidx.camera.core.ExperimentalGetImage
 class CameraAlignmentActivity : AppCompatActivity() {
 
     companion object {
-        private const val AUTO_STEP_SETTLE_MS = 1500L   // wait after each move before re-checking
+        // ── Pan (left/right) — unchanged step-and-settle behaviour ──────────
+        private const val PAN_STEP_SETTLE_MS = 1500L
         private const val PAN_STEP_DEGREES = 10
-        private const val TILT_STEP_DEGREES = 2           // small — verti range is only -3..20
+
+        // ── Tilt (up/down) — continuous, smoothed, step-limited ────────────
+        private const val TILT_MAX_STEP_PER_TICK = 2      // degrees per command — keeps it gliding, not jumping
+        private const val TILT_SPEED = 45                  // servo speed for tilt commands
+        private const val TILT_SETTLE_MS = 900L
+        private const val TILT_DEADZONE_DEGREES = 3f
+
+        // ── TTS ──
+        // A repeated status message only gets spoken again after this many
+        // ms of being stuck on the same message — stops it nagging every
+        // single frame while still reminding the person if they're not
+        // responding to the first prompt.
+        private const val STATUS_REPEAT_COOLDOWN_MS = 6000L
     }
 
     private lateinit var headControl: DamanHeadControl
     private lateinit var voiceManager: VoiceManager
+    private lateinit var feedbackManager: FeedbackManager
 
     // ── Auto align ──
     private lateinit var poseDetector: PoseDetector
@@ -44,9 +61,14 @@ class CameraAlignmentActivity : AppCompatActivity() {
     private val autoHandler = Handler(Looper.getMainLooper())
     private var isFrontCamera = true
     private var isAutoAligning = false
-    private var autoAlignBusy = false
+    private var panBusy = false
+    private var tiltBusy = false
     private var currentHoriAngle = 0
     private var currentVertiAngle = 0
+
+    // ── TTS dedupe state ──
+    private var lastSpokenMessage: String? = null
+    private var lastSpokenTime = 0L
 
     // Horizontal views
     private lateinit var seekHoriAngle: SeekBar
@@ -77,6 +99,7 @@ class CameraAlignmentActivity : AppCompatActivity() {
         setContentView(R.layout.activity_camera_alignment)
 
         headControl = DamanHeadControl(this)
+        feedbackManager = FeedbackManager(this)
 
         // FIX: react when the service actually finishes binding instead of
         // assuming it's ready the instant connect() returns (bindService is async).
@@ -224,6 +247,13 @@ class CameraAlignmentActivity : AppCompatActivity() {
         }
 
         btnContinue.setOnClickListener {
+            // NOTE: don't call feedbackManager.stopSpeaking() here — onDestroy()'s
+            // shutdown() already stops the engine as its first step. Calling stop()
+            // here AND shutdown()-which-also-stops() moments later in onDestroy()
+            // fires two stop signals at the Pico TTS engine almost simultaneously,
+            // which is what was crashing it ("Pico TTS Engine has stopped").
+            stopAutoAlign()
+
             val intent = Intent(this, CountdownActivity::class.java)
             // Pass through any extras from the previous screen
             intent.putExtras(getIntent().extras ?: Bundle())
@@ -245,7 +275,7 @@ class CameraAlignmentActivity : AppCompatActivity() {
     }
 
     // ─────────────────────────────────────────
-    // AUTO ALIGN
+    // AUTO ALIGN — continuous tracking
     // ─────────────────────────────────────────
 
     private fun setupAutoAlignButtons() {
@@ -255,76 +285,113 @@ class CameraAlignmentActivity : AppCompatActivity() {
 
     private fun startAutoAlign() {
         isAutoAligning = true
-        autoAlignBusy = false
+        panBusy = false
+        tiltBusy = false
+        lastSpokenMessage = null
+        lastSpokenTime = 0L
         currentHoriAngle = seekHoriAngle.progress - 80
         currentVertiAngle = seekVertiAngle.progress - 3
         btnAutoAlign.isEnabled = false
         btnStopAutoAlign.isEnabled = true
-        tvAutoAlignStatus.text = "Starting auto align..."
+        setStatus("Starting auto align...", speakable = false)
     }
 
-    private fun stopAutoAlign(success: Boolean = false) {
+    // This is a continuous tracking mode — it never stops itself on reaching
+    // good framing, since the whole point is to keep adjusting as the person
+    // moves. Stop is manual, e.g. right before Continue.
+    private fun stopAutoAlign() {
         isAutoAligning = false
-        autoAlignBusy = false
+        panBusy = false
+        tiltBusy = false
         autoHandler.removeCallbacksAndMessages(null)
         btnAutoAlign.isEnabled = true
         btnStopAutoAlign.isEnabled = false
-        if (!success) tvAutoAlignStatus.text = "Auto align stopped"
+        setStatus("Auto align stopped", speakable = false)
     }
 
-    private fun handleAutoAlignAdjustment(adjustment: AutoAlignmentController.Adjustment) {
-        if (!isAutoAligning || autoAlignBusy) return
+    /**
+     * Updates the on-screen status text, and optionally speaks it — with
+     * dedupe so the same message isn't spoken every single pose frame.
+     * Only re-speaks an unchanged message after STATUS_REPEAT_COOLDOWN_MS,
+     * acting as a gentle reminder rather than constant chatter.
+     */
+    private fun setStatus(message: String, speakable: Boolean) {
+        tvAutoAlignStatus.text = message
+        if (!speakable) return
 
-        when (adjustment) {
-            AutoAlignmentController.Adjustment.WAITING_FOR_PERSON -> {
-                tvAutoAlignStatus.text = "Looking for you..."
+        val now = System.currentTimeMillis()
+        if (message != lastSpokenMessage || now - lastSpokenTime >= STATUS_REPEAT_COOLDOWN_MS) {
+            feedbackManager.speakCustom(message)
+            lastSpokenMessage = message
+            lastSpokenTime = now
+        }
+    }
+
+    private fun applyAlignmentState(state: AutoAlignmentController.AlignmentState) {
+        if (!isAutoAligning) return
+
+        if (!state.personVisible) {
+            setStatus("Looking for you...", speakable = false)
+            return
+        }
+        if (!state.handsUp) {
+            setStatus("Raise both hands above your head!", speakable = true)
+            return
+        }
+
+        // ── Continuous tilt — recomputed fresh every frame, but only acted
+        //    on when not still settling from the last move, and only if
+        //    the difference is big enough to matter. ─────────────────────
+        state.targetVertiAngle?.let { target ->
+            if (!tiltBusy) {
+                val diff = target - currentVertiAngle
+                if (abs(diff) >= TILT_DEADZONE_DEGREES) {
+                    val step = diff.coerceIn(
+                        -TILT_MAX_STEP_PER_TICK.toFloat(), TILT_MAX_STEP_PER_TICK.toFloat()
+                    )
+                    val newAngle = round(currentVertiAngle + step).toInt()
+                        .coerceIn(headControl.VERTI_MIN, headControl.VERTI_MAX)
+                    if (newAngle != currentVertiAngle) {
+                        currentVertiAngle = newAngle
+                        tiltBusy = true
+                        headControl.moveVertical(currentVertiAngle, TILT_SPEED)
+                        autoHandler.postDelayed({ tiltBusy = false }, TILT_SETTLE_MS)
+                    }
+                }
             }
-            AutoAlignmentController.Adjustment.WAITING_FOR_HANDS_UP -> {
-                tvAutoAlignStatus.text = "Raise both hands above your head!"
+        }
+
+        // ── Pan — same discrete step-and-settle behaviour as before ───────
+        if (!panBusy) {
+            when (state.panAdjustment) {
+                AutoAlignmentController.PanAdjustment.LEFT -> {
+                    currentHoriAngle = (currentHoriAngle - PAN_STEP_DEGREES)
+                        .coerceIn(headControl.HORI_MIN, headControl.HORI_MAX)
+                    panBusy = true
+                    headControl.moveHorizontal(currentHoriAngle, 50)
+                    autoHandler.postDelayed({ panBusy = false }, PAN_STEP_SETTLE_MS)
+                }
+                AutoAlignmentController.PanAdjustment.RIGHT -> {
+                    currentHoriAngle = (currentHoriAngle + PAN_STEP_DEGREES)
+                        .coerceIn(headControl.HORI_MIN, headControl.HORI_MAX)
+                    panBusy = true
+                    headControl.moveHorizontal(currentHoriAngle, 50)
+                    autoHandler.postDelayed({ panBusy = false }, PAN_STEP_SETTLE_MS)
+                }
+                else -> {}
             }
-            AutoAlignmentController.Adjustment.NEED_TILT_UP -> {
-                // Verti: lower angle (toward -3) = looking up, per seekVertiAngle
-                // "Up" label being on the low-progress side.
-                currentVertiAngle = (currentVertiAngle - TILT_STEP_DEGREES)
-                    .coerceIn(headControl.VERTI_MIN, headControl.VERTI_MAX)
-                tvAutoAlignStatus.text = "Tilting up to see your hands..."
-                autoAlignBusy = true
-                headControl.moveVertical(currentVertiAngle, 40)
-                autoHandler.postDelayed({ autoAlignBusy = false }, AUTO_STEP_SETTLE_MS)
-            }
-            AutoAlignmentController.Adjustment.NEED_TILT_DOWN -> {
-                // Verti: higher angle (toward 20) = looking down.
-                currentVertiAngle = (currentVertiAngle + TILT_STEP_DEGREES)
-                    .coerceIn(headControl.VERTI_MIN, headControl.VERTI_MAX)
-                tvAutoAlignStatus.text = "Tilting down to see your feet..."
-                autoAlignBusy = true
-                headControl.moveVertical(currentVertiAngle, 40)
-                autoHandler.postDelayed({ autoAlignBusy = false }, AUTO_STEP_SETTLE_MS)
-            }
-            AutoAlignmentController.Adjustment.NEED_STEP_BACK -> {
-                // No wheels — just ask the person to step back themselves.
-                tvAutoAlignStatus.text = "Take a step back so I can see all of you!"
-            }
-            AutoAlignmentController.Adjustment.NEED_PAN_LEFT -> {
-                currentHoriAngle = (currentHoriAngle - PAN_STEP_DEGREES)
-                    .coerceIn(headControl.HORI_MIN, headControl.HORI_MAX)
-                tvAutoAlignStatus.text = "Adjusting view..."
-                autoAlignBusy = true
-                headControl.moveHorizontal(currentHoriAngle, 50)
-                autoHandler.postDelayed({ autoAlignBusy = false }, AUTO_STEP_SETTLE_MS)
-            }
-            AutoAlignmentController.Adjustment.NEED_PAN_RIGHT -> {
-                currentHoriAngle = (currentHoriAngle + PAN_STEP_DEGREES)
-                    .coerceIn(headControl.HORI_MIN, headControl.HORI_MAX)
-                tvAutoAlignStatus.text = "Adjusting view..."
-                autoAlignBusy = true
-                headControl.moveHorizontal(currentHoriAngle, 50)
-                autoHandler.postDelayed({ autoAlignBusy = false }, AUTO_STEP_SETTLE_MS)
-            }
-            AutoAlignmentController.Adjustment.ALIGNED -> {
-                tvAutoAlignStatus.text = "Perfect! I can see you fully."
-                stopAutoAlign(success = true)
-            }
+        }
+
+        // ── Status message — the meaningful outcomes get spoken, the
+        //    generic "still adjusting" filler stays silent. ───────────────
+        when {
+            !state.feetVisible && currentVertiAngle >= headControl.VERTI_MAX - 1 ->
+                setStatus("Take a step back so I can see your feet!", speakable = true)
+            state.fingersVisible && state.feetVisible &&
+                    state.panAdjustment == AutoAlignmentController.PanAdjustment.CENTERED ->
+                setStatus("Perfect! I can see you fully.", speakable = true)
+            else ->
+                setStatus("Adjusting...", speakable = false)
         }
     }
 
@@ -334,8 +401,10 @@ class CameraAlignmentActivity : AppCompatActivity() {
         poseDetector = PoseDetector(this) { pose, imageWidth, imageHeight ->
             if (isAutoAligning) {
                 autoAlignController.setImageDimensions(imageWidth, imageHeight, isFrontCamera)
-                val adjustment = autoAlignController.evaluate(pose)
-                runOnUiThread { handleAutoAlignAdjustment(adjustment) }
+                val state = autoAlignController.evaluate(
+                    pose, currentVertiAngle, headControl.VERTI_MIN, headControl.VERTI_MAX
+                )
+                runOnUiThread { applyAlignmentState(state) }
             }
         }
     }
@@ -408,6 +477,7 @@ class CameraAlignmentActivity : AppCompatActivity() {
         stopAutoAlign()
         headControl.disconnect()
         voiceManager.stopListening()
+        feedbackManager.shutdown()
         poseDetector.close()
         cameraExecutor.shutdown()
     }
